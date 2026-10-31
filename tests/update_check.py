@@ -25,6 +25,10 @@ update._after = lambda pid, cmd, cleanup=None: started.append(cmd)   # nothing i
 by_page = update._latest_by_page("0.0.0")
 print("newest release, from its page:", by_page["version"])
 rel = update.latest("0.0.0")
+if not update.asset_for(system, rel):
+    # the build for a new release's tag runs before its files for Windows and macOS are attached
+    print("the newest release (%s) has no download for %s yet, so there's nothing to try" % (rel["version"], system))
+    sys.exit(0)
 assert rel["version"] == by_page["version"] and update.asset_for(system, by_page)["url"] == update.asset_for(system, rel)["url"]
 print("newest release:", rel["version"], "with", ", ".join(sorted(rel["assets"])))
 assert update.version_tuple(rel["version"]) > update.version_tuple("1.1.0"), "1.1.0 should see it as newer"
