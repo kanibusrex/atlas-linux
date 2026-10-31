@@ -8,6 +8,10 @@ APP=dist/Atlas.app/Contents/MacOS/Atlas
 
 fail() { echo "$1"; echo "---- atlas.log"; cat "$ATLAS_LOG"; exit 1; }
 
+# the built app's own Python reaching GitHub (it has no certificates of its own; see atlas_update.py)
+"$APP" --check-update 2>&1 | tee -a try/check-update.txt
+[ "${PIPESTATUS[0]}" = 0 ] || fail "The built Atlas couldn't reach GitHub to look for updates."
+
 "$APP" /System/Applications &   # only apps there, so their icons show
 atlas=$!
 sleep 25

@@ -20,6 +20,23 @@ import urllib.error
 import urllib.request
 
 REPO = "kanibusrex/atlas-linux"
+
+
+def _tls():
+    """Secure connections checked against the system's own trusted certificates (macOS's Keychain, Windows'
+    store, Linux's), through truststore: the Python inside the built app has no list of its own to go by."""
+    try:
+        import ssl
+        import truststore
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except ImportError:
+        return None
+
+
+def _open(req, timeout):
+    return urllib.request.urlopen(req, timeout=timeout, context=_tls())
+
+
 LATEST = "https://api.github.com/repos/" + REPO + "/releases/latest"
 ASSET = {"linux": re.compile(r"^Atlas-x86_64\.AppImage$"),
          "windows": re.compile(r"^Atlas-[\d.]+-windows-x64-setup\.exe$"),
@@ -36,7 +53,7 @@ def latest(current):
     if os.environ.get("GITHUB_TOKEN"):   # in CI, whose machines share the API's hourly allowance
         headers["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
     try:
-        with urllib.request.urlopen(urllib.request.Request(LATEST, headers=headers), timeout=15) as r:
+        with _open(urllib.request.Request(LATEST, headers=headers), 15) as r:
             rel = json.load(r)
     except urllib.error.HTTPError as e:
         if e.code not in (403, 429):
@@ -50,7 +67,7 @@ def _latest_by_page(current):
     """The newest release without the API: its page's address names the version, and each download's name
     follows from it. No notes this way."""
     page = "https://github.com/" + REPO + "/releases/latest"
-    with urllib.request.urlopen(urllib.request.Request(page, method="HEAD", headers={"User-Agent": "Atlas/" + current}), timeout=15) as r:
+    with _open(urllib.request.Request(page, method="HEAD", headers={"User-Agent": "Atlas/" + current}), 15) as r:
         url = r.geturl()   # .../releases/tag/v1.2.1, once the redirect is followed
     tag = url.rstrip("/").rsplit("/", 1)[-1]
     v = tag.lstrip("v")
@@ -87,7 +104,7 @@ def download(a, dest_dir, progress):
     os.makedirs(dest_dir, exist_ok=True)
     dest = os.path.join(dest_dir, a["name"])
     req = urllib.request.Request(a["url"], headers={"User-Agent": "Atlas"})
-    with urllib.request.urlopen(req, timeout=60) as r, open(dest + ".part", "wb") as f:
+    with _open(req, 60) as r, open(dest + ".part", "wb") as f:
         total, done = int(r.headers.get("Content-Length") or a.get("size") or 0), 0
         while True:
             buf = r.read(262144)

@@ -58,7 +58,7 @@ else:
 
 import webview  # noqa: E402
 
-VERSION = "1.2.2"
+VERSION = "1.2.3"
 DATA_DIR = desktop.DATA_DIR
 PAGE = os.path.join(HERE, "atlas.html")
 BG = "#1a1b1e"
@@ -738,6 +738,15 @@ def main():
         except ValueError:
             sys.exit("--pick needs JSON, like '{\"mode\": \"open\"}'")
         args = []
+    # --check-update: asks GitHub for the newest release and says what it found (for trying the built app)
+    if args[:1] == ["--check-update"]:
+        try:
+            rel = update.latest(VERSION)
+            print("Atlas %s: the newest release is %s, with %s" % (VERSION, rel["version"], ", ".join(sorted(rel["assets"]))), file=sys.stderr)
+        except Exception as e:
+            print("Atlas %s couldn't reach GitHub: %s" % (VERSION, e), file=sys.stderr)
+            sys.exit(1)
+        return
     path = desktop.start_path(args[0], os.getcwd()) if args else ""
     # Atlas runs once per person: opened again (from the launcher, or with a folder), it passes the folder
     # to the window already open, which comes to the front and opens the folder in a new tab.

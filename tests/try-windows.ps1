@@ -16,6 +16,11 @@ function Shot($name) {
 }
 
 try {
+  # the built app's own Python reaching GitHub (it has no certificates of its own; see atlas_update.py)
+  $check = Start-Process dist\Atlas\Atlas.exe -ArgumentList "--check-update" -Wait -PassThru
+  Get-Content $env:ATLAS_LOG -ErrorAction SilentlyContinue | Select-String "Atlas \S+ (couldn't reach GitHub|: the newest release)"
+  if ($check.ExitCode -ne 0) { throw "The built Atlas couldn't reach GitHub to look for updates." }
+
   $atlas = Start-Process dist\Atlas\Atlas.exe -ArgumentList "C:\Windows" -PassThru
   Start-Sleep 25
   Shot "1-started"
