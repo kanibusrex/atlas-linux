@@ -1201,6 +1201,7 @@ def is_archive(p):
 
 def find_zip_part(path):
     """A path that goes inside an archive (/home/me/Report.zip/Images): the archive, and where inside it."""
+    path = _re.sub("/{2,}", "/", path)
     parts = path.split(SEP)
     for i in range(1, len(parts)):
         z = SEP.join(parts[:i + 1])

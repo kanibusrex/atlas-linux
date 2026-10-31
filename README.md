@@ -2,6 +2,8 @@
 
 **A fast, keyboard-friendly file manager for Arch and Omarchy.** Tabs, two panes, folder columns, previews, archives, network shares and the Trash — in a window that follows your Omarchy theme and font.
 
+![Atlas, with two panes: a folder's files on the left, photo thumbnails and a preview on the right](docs/screenshots/main.png)
+
 Atlas began as a Windows file explorer (PowerShell + WebView2). This is its Linux version: the same page, hosted by Python, GTK 3 and WebKitGTK, and shipped as a small AppImage that uses your system's Python and WebKit.
 
 ## Features
@@ -23,19 +25,31 @@ Atlas began as a Windows file explorer (PowerShell + WebView2). This is its Linu
 - **What's using it**: which programs have a file, folder or drive open, with a button to end them.
 - File hashes, folder comparison, zip creation, and "Set as wallpaper" for images (Omarchy).
 
+![The Properties dialog: owner, group, and read, change and run permissions](docs/screenshots/properties.png)
+
 ### Previews
 - Photos, video thumbnails (ffmpegthumbnailer) and the first page of PDFs (poppler), in tiles and the preview pane.
 - Video and audio playback, Office documents' text, Markdown rendered, and code in colour.
 
+| | |
+|---|---|
+| ![A PDF's first page as its thumbnail, and a Markdown file rendered in the preview](docs/screenshots/documents.png) | ![A Python script shown in colour in the preview](docs/screenshots/code.png) |
+
 ### Archives
 Browse inside **zip, tar (.gz, .xz, .zst, .bz2), 7z, rar and iso** as if they were folders, and extract all or just what you select (bsdtar).
+
+![Inside a 7z archive, with Extract selected and Extract all](docs/screenshots/archive.png)
 
 ### Drives and network
 - Drives with free space, **eject** for USB drives, and one click to open drives that are plugged in but not mounted.
 - **Connect to a server**: Windows/Samba shares (`//nas/share`, or `//nas` to pick a share), **SFTP**, **FTP** and **WebDAV**, through GVFS — no root, no fstab. Passwords can be kept in the keyring, and remembered shares reconnect when Atlas opens.
 
+![The Connect to a server dialog](docs/screenshots/connect.png)
+
 ### The Trash
 One Trash view for your home Trash and every mounted drive's own, showing where each item was and when it was deleted, with Restore, Delete permanently and Empty Trash.
+
+![The Trash, with where each item was and when it was deleted](docs/screenshots/trash.png)
 
 ### Omarchy
 - Follows the **Omarchy theme** (colours and folder icons) and **font**, live as you change them.
