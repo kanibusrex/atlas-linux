@@ -830,7 +830,11 @@ body.frameless .side-pin { padding-top: 12px; }
 .side-tools .ritem { flex: 1; width: auto; min-width: 0; padding: 8px 0; border-radius: 10px; }
 .side-tools .ritem > span:not(.badge) { display: none; }
 .side-tools .ritem svg { width: 17px; height: 17px; }
-.side-tools .ritem::after { top: 50%; margin-top: -13px; height: 26px; width: 30px; margin-left: -15px; }
+.side-tools .ritem::after { top: 50%; margin-top: -13px; height: 26px; width: auto; margin-left: 0; left: calc(50% - 15px); right: calc(50% - 15px);
+  transition: opacity .25s var(--ease), transform .3s cubic-bezier(.3,1.5,.5,1), right .3s var(--ease); }
+/* two switched on side by side share one pill: the first one's pill reaches across the second */
+.side-tools .ritem.on:has(+ .ritem.on)::after { right: calc(-50% - 17px); }
+.side-tools .ritem.on + .ritem.on::after { opacity: 0; transform: none; }
 .side-tools .ritem .badge { top: 0; right: 2px; }
 .side-tools .grow { display: none; }
 /* the rail: what's switched on sits in a glowing pill that grows in */
