@@ -1,0 +1,9 @@
+#!/bin/sh
+# Atlas AppImage entry point: the system's Python, GTK 3 and WebKitGTK 4.1 run the bundled app
+HERE="$(dirname "$(readlink -f "$0")")"
+if ! python3 -c 'import gi; gi.require_version("WebKit2", "4.1")' 2>/dev/null; then
+  msg="Atlas needs python-gobject and webkit2gtk-4.1:  sudo pacman -S python-gobject webkit2gtk-4.1"
+  command -v notify-send >/dev/null && notify-send "Atlas" "$msg"
+  echo "$msg" >&2; exit 1
+fi
+exec python3 -I "$HERE/usr/share/atlas/atlas.py" "$@"

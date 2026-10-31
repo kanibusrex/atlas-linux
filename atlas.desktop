@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Atlas
+GenericName=File Explorer
+Comment=A file manager with tabs, two panes, previews, archives, network shares and the Trash
+Exec=atlas %U
+Icon=atlas
+Terminal=false
+Categories=System;FileTools;FileManager;Utility;
+MimeType=inode/directory;
+StartupWMClass=dev.atlas.Atlas
+Keywords=files;folders;explorer;browser;
