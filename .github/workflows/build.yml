@@ -54,7 +54,7 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y | Out-Null
-          $v = python -c "import re; print(re.search(r'VERSION = \"([^\"]+)\"', open('atlas.py').read()).group(1))"
+          $v = (Select-String -Path atlas.py -Pattern '^VERSION = "(.+)"').Matches[0].Groups[1].Value
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVersion=$v" windows\atlas.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
 

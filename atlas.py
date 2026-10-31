@@ -4,7 +4,7 @@ Atlas: a file explorer, in a pywebview window. The counterpart of AtlasShell.ps1
 
 The window here does the file work; atlas.html, beside this script, is what you see. The page asks the
 window for things by message (list a folder, search, copy...), exactly as it does in WebView2 on
-Windows: a small script gives the page the same window.chrome.webview it expects. Anything that can
+Windows: a small script gives the page an object that works like the window.chrome.webview it had there. Anything that can
 take a while runs in a background thread, so the window never freezes, and its progress is passed back
 to the page as it goes. atlas_core.py holds the file operations; atlas_linux.py what is asked of the
 desktop (drives, shares, the clipboard, icons...).
@@ -62,8 +62,9 @@ PICK_STATE = os.path.join(DATA_DIR, "pick.json")   # the folder last picked from
 PAGE_STATE = os.path.join(DATA_DIR, "page.json")   # the page's saved choices: favourites, tabs, theme...
 THUMB_DIR = os.path.join(desktop.CACHE_DIR, "thumbs")
 
-# what the page is given before its own script runs: the window.chrome.webview it talks to on Windows,
-# its saved choices, and where to ask for files and icons
+# what the page is given before its own script runs: __atlasHost, which works like the window.chrome.webview
+# it talked to in the Windows Atlas, its saved choices, and where to ask for files and icons. (Not
+# window.chrome.webview itself: on Windows pywebview's own messages go through the real one.)
 BRIDGE = r"""
 window.__atlasLinux = %(linux)s;
 window.__atlasRes = %(res)s;
@@ -74,8 +75,7 @@ window.__atlasRes = %(res)s;
     if (api && api.post) { api.post(s); } else { waiting.push(s); }
   }
   window.addEventListener("pywebviewready", function () { var w = waiting; waiting = []; w.forEach(send); });
-  window.chrome = window.chrome || {};
-  window.chrome.webview = {
+  window.__atlasHost = {
     postMessage: function (m) { send(JSON.stringify(m)); },
     addEventListener: function (type, fn) { if (type === "message") { listeners.push(fn); } },
     removeEventListener: function (type, fn) { listeners = listeners.filter(function (f) { return f !== fn; }); }
@@ -386,6 +386,8 @@ class Host:
                              "max": self.is_max, "linux": desktop.LINUX, "zoom": float(self.prefs.get("Zoom", 1.15)),
                              "isDefault": self.desktop.is_default()})
             self.page_ready = True
+            if os.environ.get("ATLAS_DEBUG"):
+                print("The page is up and talking to Atlas.", file=sys.stderr)
             for msg in self.pending_open:
                 self.send(msg)
             self.pending_open = []

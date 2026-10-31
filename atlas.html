@@ -1014,7 +1014,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
                         { ev: "changed", path }        a folder that is open here changed on disk
      ================================================================================================ */
   var W = window, D = document;
-  var host = W.chrome && W.chrome.webview;
+  var host = W.__atlasHost || (W.chrome && W.chrome.webview);
   var $ = function (id) { return D.getElementById(id); };
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function svg(id, cls) { return "<svg class='ico" + (cls ? " " + cls : "") + "' viewBox='0 0 24 24'><use href='#i-" + id + "'/></svg>"; }

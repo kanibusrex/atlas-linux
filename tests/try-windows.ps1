@@ -20,6 +20,7 @@ try {
   Start-Sleep 25
   Shot "1-started"
   if ($atlas.HasExited) { throw "Atlas closed by itself (exit code $($atlas.ExitCode))" }
+  if (-not (Select-String -Path $env:ATLAS_LOG -SimpleMatch "The page is up and talking to Atlas" -Quiet)) { throw "Atlas's window opened, but its page never reached Atlas." }
 
   # a second Atlas hands its folder to the first (a new tab there), and leaves
   $t = [Diagnostics.Stopwatch]::StartNew()
