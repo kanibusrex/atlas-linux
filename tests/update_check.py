@@ -56,13 +56,12 @@ elif system == "mac":
     print("Atlas.app swapped:", sorted(os.listdir(os.path.join(work, "Applications"))))
 else:
     exe = os.path.join(os.environ["LOCALAPPDATA"], "Programs", "Atlas", "Atlas.exe")
-    update.install(system, f, os.path.dirname(exe))
-    # the installer runs on its own; wait for it to finish
-    for _ in range(120):
-        r = subprocess.run(["tasklist", "/FI", "IMAGENAME eq " + a["name"]], capture_output=True, text=True)
-        if a["name"].lower() not in r.stdout.lower():
-            break
-        time.sleep(1)
+    setup = update.install(system, f, os.path.dirname(exe))
+    print("the installer finished with", setup.wait(300))
+    time.sleep(2)
+    if not os.path.exists(exe):
+        print("---- the installer's log")
+        print(open(f + ".log", encoding="utf-8", errors="replace").read() if os.path.exists(f + ".log") else "(none)")
     assert os.path.exists(exe), "the installer didn't put Atlas.exe in " + os.path.dirname(exe)
     print("installed:", exe)
     subprocess.run(["taskkill", "/F", "/IM", "Atlas.exe"], capture_output=True)   # the update opens Atlas again

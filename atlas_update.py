@@ -104,7 +104,8 @@ def download(a, dest_dir, progress):
 
 # ---- Putting it in place, and starting it once this Atlas has closed -------------------------------------
 def install(system, file, where):
-    """Puts the downloaded update in place, and leaves something waiting to start it. Atlas closes after."""
+    """Puts the downloaded update in place, and leaves something waiting to start it. Atlas closes after.
+    On Windows, gives back the installer, still running (its log is the download's name + .log)."""
     me = os.getpid()
     if system == "linux":
         new = where + ".new"
@@ -114,8 +115,8 @@ def install(system, file, where):
         _after(me, [where])
     elif system == "windows":
         # silently over this install; the installer opens Atlas again when it's done (see windows/atlas.iss)
-        subprocess.Popen([file, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS"],
-                         creationflags=0x00000008 | 0x00000200)   # detached, in its own group, so it outlives Atlas
+        return subprocess.Popen([file, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CLOSEAPPLICATIONS", "/LOG=" + file + ".log"],
+                                creationflags=0x00000008 | 0x00000200)   # detached, in its own group, so it outlives Atlas
     else:
         mnt = tempfile.mkdtemp(prefix="atlas-update-")
         subprocess.run(["/usr/bin/hdiutil", "attach", "-nobrowse", "-readonly", "-mountpoint", mnt, file], check=True,
