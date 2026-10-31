@@ -1211,8 +1211,9 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var k = kindOf(e);
     if (k === "folder") { return "<span class='fi'>" + (e.a === "share" ? "<svg class='ico' viewBox='0 0 24 24' style='color:var(--muted)'><use href='#i-net'/></svg>" : folderSvg()) + "</span>"; }
     if (nativeIcons) {
-      var x = extOf(e.n), own = /^\.(exe|lnk|ico|url|msi)$/.test(x);
-      var src = RES + "icon?" + (own && !LINUX ? "p=" + encodeURIComponent(full) : "e=" + encodeURIComponent(x || ".file")) + (large ? "&s=l" : "");
+      // a file with an icon of its own (a program's, an app's) asks for that one; the rest, their kind's
+      var x = extOf(e.n), own = W.__atlasSystem === "mac" ? x === ".app" : !LINUX && /^\.(exe|lnk|ico|url|msi)$/.test(x);
+      var src = RES + "icon?" + (own ? "p=" + encodeURIComponent(full) : "e=" + encodeURIComponent(x || ".file")) + (large ? "&s=l" : "");
       return "<span class='fi' data-k='" + k + "'><img alt='' src='" + esc(src) + "' onerror='window.__fdIconFail(this)'></span>";
     }
     return "<span class='fi'>" + fileSvg(k) + "</span>";
