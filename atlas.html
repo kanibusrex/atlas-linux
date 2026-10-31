@@ -121,8 +121,16 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 /* ---- A pane: tabs, bar, list, status -------------------------------------------------------------- */
 .pane { container-type: inline-size; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: var(--radius); overflow: hidden; }
 .panes.dual .pane.active { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
-.tabs { display: flex; align-items: flex-end; gap: 2px; padding: 5px 6px 0; background: var(--head); min-height: 34px; overflow-x: auto; overflow-y: hidden; }
-.tabs::-webkit-scrollbar { height: 0; }
+.tabs { display: flex; align-items: flex-end; gap: 2px; padding: 5px 6px 0; background: var(--head); min-height: 34px; overflow: hidden; }
+.tstrip { display: flex; align-items: flex-end; gap: 2px; min-width: 0; flex: 0 1 auto; overflow-x: auto; overflow-y: hidden; scroll-behavior: smooth; align-self: stretch; }
+.tstrip::-webkit-scrollbar { height: 0; }
+/* when there are more tabs than fit: the edges fade where more are hidden, and arrows and a list of them appear */
+.tabs.ovf.more-l .tstrip { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px); mask-image: linear-gradient(90deg, transparent 0, #000 28px); }
+.tabs.ovf.more-r .tstrip { -webkit-mask-image: linear-gradient(270deg, transparent 0, #000 28px); mask-image: linear-gradient(270deg, transparent 0, #000 28px); }
+.tabs.ovf.more-l.more-r .tstrip { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%); }
+.tsc { display: none; }
+.tabs.ovf .tsc { display: grid; }
+.tsc:disabled { opacity: .35; cursor: default; background: transparent; }
 .tab { display: flex; align-items: center; gap: 6px; max-width: 200px; min-width: 84px; height: 29px; padding: 0 5px 0 10px; font-size: 12.5px; border-radius: 8px 8px 0 0; color: var(--text-2); cursor: pointer; flex: none; position: relative; }
 .tab:hover { background: color-mix(in srgb, var(--surface) 55%, transparent); }
 .tab.on { background: var(--surface); color: var(--text); }
@@ -133,8 +141,8 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .tab.drop { box-shadow: inset 0 -2px 0 var(--accent); }
 .tab > .ico { color: var(--muted); }
 .tab.on > .ico { color: var(--accent); }
-.tadd { border: 0; background: transparent; color: var(--muted); width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; cursor: pointer; flex: none; margin: 0 0 1px 2px; }
-.tadd:hover { background: color-mix(in srgb, var(--surface) 55%, transparent); color: var(--text); }
+.tadd, .tsc { border: 0; background: transparent; color: var(--muted); width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; cursor: pointer; flex: none; margin: 0 0 1px 2px; }
+.tadd:hover, .tsc:not(:disabled):hover { background: color-mix(in srgb, var(--surface) 55%, transparent); color: var(--text); }
 
 .bar { display: flex; align-items: center; gap: 4px; padding: 5px 8px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
 .ib { border: 0; background: transparent; color: var(--text-2); width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; cursor: pointer; flex: none; }
@@ -416,6 +424,7 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .menu button:disabled { opacity: .4; cursor: default; }
 .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
 .menu .mh { padding: 6px 10px 4px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.menu { max-height: calc(100vh - 12px); overflow-y: auto; }
 .menu .sw { width: 14px; height: 14px; border-radius: 50%; flex: none; }
 
 .scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.42); display: grid; place-items: center; padding: 30px; }
@@ -763,7 +772,7 @@ button:focus-visible, .sitem:focus-visible, .mi:focus-visible { outline: 0; box-
 
 .tabs { min-height: 30px; padding: 5px 8px 0; }
 .tab { height: 25px; font-size: 12px; min-width: 76px; }
-.tadd { width: 22px; height: 22px; }
+.tadd, .tsc { width: 22px; height: 22px; }
 .bar { padding: 4px 8px; gap: 3px; }
 .crumbs { height: 27px; font-size: 12px; }
 .find input { height: 27px; font-size: 12px; }
@@ -822,7 +831,7 @@ body.maxed .wctl .wres { display: block; }
 body.maxed .wtop { display: none !important; }
 /* the tab strip and the rail move the window; what is on them still clicks */
 body.frameless .tabs, body.frameless .rail { app-region: drag; }
-body.frameless .tab, body.frameless .tadd, body.frameless .ritem, body.frameless .rail button { app-region: no-drag; }
+body.frameless .tab, body.frameless .tadd, body.frameless .tsc, body.frameless .ritem, body.frameless .rail button { app-region: no-drag; }
 body.frameless .tabs { min-height: 36px; padding-top: 6px; }
 body.frameless .panes > .pane:last-child .tabs { padding-right: 150px; }
 body.frameless.pvright .panes > .pane:last-child .tabs { padding-right: 10px; }
@@ -901,6 +910,62 @@ body.frameless .side-pin { padding-top: 12px; }
 .permtab input { width: 16px; height: 16px; accent-color: var(--accent); }
 /* Linux: what only Windows can do is not offered */
 html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-mapdrive], html.linux [data-addsrv] { display: none !important; }
+
+/* ================================================================================================
+   Bold themes: two accents that flow into each other, and a slow glow of both behind everything.
+   (data-look="bold"; the colours themselves come from boldLook(), on top of Atlas's dark or light look)
+   ================================================================================================ */
+[data-look="bold"] {
+  --grad-accent: linear-gradient(115deg, var(--accent) 0%, var(--accent-2) 50%, var(--accent) 100%);
+  --grad-sel: linear-gradient(90deg, color-mix(in srgb, var(--accent) 30%, transparent) 0%, color-mix(in srgb, var(--accent-2) 16%, transparent) 100%);
+  --sel-line: color-mix(in srgb, var(--accent-2) 60%, transparent);
+}
+[data-look="bold"] body {
+  background:
+    radial-gradient(1000px 700px at -10% -15%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 62%),
+    radial-gradient(900px 700px at 112% 118%, color-mix(in srgb, var(--accent-2) 18%, transparent), transparent 60%),
+    var(--bg);
+}
+[data-look="bold"][data-theme="graphite"] body {
+  background:
+    radial-gradient(1000px 700px at -10% -15%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 62%),
+    radial-gradient(900px 700px at 112% 118%, color-mix(in srgb, var(--accent-2) 13%, transparent), transparent 60%),
+    var(--bg);
+}
+/* the glow of both accents settles into place when the theme is chosen (once: nothing moves while Atlas sits idle,
+   which matters on slower machines, where a constant animation keeps WebKit redrawing the whole window) */
+[data-look="bold"] body::before {
+  content: ""; position: fixed; inset: -20%; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(38% 34% at 30% 35%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 70%),
+    radial-gradient(34% 30% at 72% 66%, color-mix(in srgb, var(--accent-2) 13%, transparent), transparent 70%);
+  animation: boldSettle 1.6s var(--ease) both;
+}
+[data-look="bold"][data-theme="graphite"] body::before { opacity: .7; }
+[data-look="bold"] #app { position: relative; z-index: 0; }
+@keyframes boldSettle { from { opacity: 0; transform: translate3d(-8%, -6%, 0) scale(1.15) rotate(-8deg); } to { transform: none; } }
+/* the accents run from one colour to the other, and move when they're touched or change */
+[data-look="bold"] .btn.pri, [data-look="bold"] .rail .tile, [data-look="bold"] .ritem.on::before, [data-look="bold"] .ritem .badge, [data-look="bold"] .tab.on::after {
+  background-image: var(--grad-accent); background-size: 200% 100%; background-position: 0% 50%;
+}
+[data-look="bold"] .btn.pri { transition: background-position .6s var(--ease), box-shadow .3s var(--ease), transform .18s var(--ease);
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 40%, transparent), 0 2px 8px color-mix(in srgb, var(--accent-2) 28%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+[data-look="bold"] .btn.pri:hover { background-position: 100% 50%; transform: translateY(-1px);
+  box-shadow: 0 6px 24px color-mix(in srgb, var(--accent-2) 42%, transparent), 0 2px 8px color-mix(in srgb, var(--accent) 30%, transparent), inset 0 1px 0 rgba(255,255,255,.3); }
+[data-look="bold"] .tab.on::after { height: 3px; opacity: 1; left: 8px; right: 8px; }
+[data-look="bold"] .tab.on.fresh::after { animation: boldTab .45s var(--ease) both; }
+@keyframes boldTab { from { transform: scaleX(.15); background-position: 100% 50%; opacity: .3; } to { transform: none; background-position: 0% 50%; } }
+[data-look="bold"] .ttl h2 .tn {
+  background-image: linear-gradient(90deg, var(--accent) 0%, var(--accent-2) 50%, var(--accent) 100%); background-size: 200% 100%; background-position: 0% 50%;
+  transition: background-position 1.2s var(--ease);
+}
+[data-look="bold"] .ttl h2:hover .tn { background-position: 100% 50%; }
+[data-look="bold"] .crumb.last { color: var(--accent-2); }
+[data-look="bold"] .tab.on > .ico { color: var(--accent-2); }
+[data-look="bold"] .row.sel, [data-look="bold"] .tile.sel { box-shadow: inset 2px 0 0 var(--accent-2); }
+@media (prefers-reduced-motion: reduce) {
+  [data-look="bold"] body::before, [data-look="bold"] .tab.on.fresh::after { animation: none; }
+}
 </style>
 </head>
 <body>
@@ -966,6 +1031,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
     <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
     <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
     <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></symbol>
@@ -1628,18 +1694,53 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   /* ================================================================================================
      Painting a pane
      ================================================================================================ */
+  // the tab strip: whether its tabs overflow, which ends hide some, and (reveal) the active tab scrolled into view
+  function tabsFit(tabs, reveal) {
+    var strip = tabs.querySelector(".tstrip");
+    if (!strip) { return; }
+    var ovf = strip.scrollWidth > strip.clientWidth + 1;
+    tabs.classList.toggle("ovf", ovf);
+    if (reveal) {
+      var on = strip.querySelector(".tab.on");
+      if (on) {
+        var l = on.offsetLeft - strip.offsetLeft, pad = 30;
+        if (l - pad < strip.scrollLeft) { strip.scrollLeft = Math.max(0, l - pad); }
+        else if (l + on.offsetWidth + pad > strip.scrollLeft + strip.clientWidth) { strip.scrollLeft = l + on.offsetWidth + pad - strip.clientWidth; }
+      }
+    }
+    tabEnds(tabs);
+  }
+  function tabEnds(tabs) {
+    var strip = tabs.querySelector(".tstrip"), max = strip.scrollWidth - strip.clientWidth;
+    // (a smooth scroll is still on its way: judge by where it's going)
+    var at = strip._to != null ? strip._to : strip.scrollLeft;
+    tabs.classList.toggle("more-l", at > 1);
+    tabs.classList.toggle("more-r", at < max - 1);
+    var b = tabs.querySelectorAll("[data-sc]");
+    if (b.length) { b[0].disabled = at <= 1; b[1].disabled = at >= max - 1; }
+  }
   function paintPane(i) {
     var p = panes[i];
     if (!p || !p.el) { return; }
     var t = tabOf(p), el = p.el;
     // tabs
-    var tabs = el.querySelector(".tabs");
-    tabs.innerHTML = p.tabs.map(function (tb, k) {
+    var tabs = el.querySelector(".tabs"), strip = tabs.querySelector(".tstrip");
+    if (!strip) {
+      tabs.innerHTML = "<div class='tstrip'></div><button class='tadd' title='New tab (Ctrl+T)'>" + svg("plus") + "</button>" +
+        "<button class='tsc' data-sc='-1' title='Scroll tabs left'>" + svg("back") + "</button><button class='tsc' data-sc='1' title='Scroll tabs right'>" + svg("fwd") + "</button>" +
+        "<button class='tsc' data-tl title='All tabs'>" + svg("chev") + "</button>";
+      strip = tabs.querySelector(".tstrip");
+    }
+    var keep = strip.scrollLeft, fresh = tabs._shown != null && p.active !== tabs._shown;   // (fresh: just switched to)
+    strip.innerHTML = p.tabs.map(function (tb, k) {
       var label = tb.mode === "search" ? "Search: " + tb.search.query : tb.mode === "space" ? "Space: " + baseName(tb.space.path) : baseName(tb.path);
       var ic = tb.mode === "search" ? svg("search") : tb.mode === "space" ? svg("pie") : tb.path === "" ? svg("pc") : /^\\\\[^\\]+$/.test(tb.path) ? svg("server") : "<span class='fi' style='width:16px;height:16px'>" + folderSvg() + "</span>";
-      return "<div class='tab" + (k === p.active ? " on" : "") + "' role='tab' data-t='" + k + "' title='" + esc(tb.path || "This PC") + "' aria-selected='" + (k === p.active) + "'>" + ic + "<span class='tl'>" + esc(label) + "</span>" +
+      return "<div class='tab" + (k === p.active ? " on" + (fresh ? " fresh" : "") : "") + "' role='tab' data-t='" + k + "' title='" + esc(tb.path || "This PC") + "' aria-selected='" + (k === p.active) + "'>" + ic + "<span class='tl'>" + esc(label) + "</span>" +
         "<button class='tx' data-x='" + k + "' title='Close tab (Ctrl+W)'>" + svg("x") + "</button></div>";
-    }).join("") + "<button class='tadd' title='New tab (Ctrl+T)'>" + svg("plus") + "</button>";
+    }).join("");
+    strip.scrollLeft = keep;
+    tabsFit(tabs, p.active !== tabs._shown || p.tabs.length !== tabs._count);
+    tabs._shown = p.active; tabs._count = p.tabs.length;
     // bar
     el.querySelector("[data-a=back]").disabled = t.mode === "folder" && t.hi <= 0;
     el.querySelector("[data-a=fwd]").disabled = t.hi >= t.hist.length - 1 || t.mode !== "folder";
@@ -3707,11 +3808,38 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       var x = ev.target.closest("[data-x]");
       if (x) { ev.stopPropagation(); closeTab(i, +x.getAttribute("data-x")); return; }
       if (ev.target.closest(".tadd")) { addTab(i, cur().path); return; }
+      var sc = ev.target.closest("[data-sc]"), strip = el.querySelector(".tstrip");
+      if (sc) {   // a page of tabs at a time
+        var to = Math.max(0, Math.min(strip.scrollWidth - strip.clientWidth, strip.scrollLeft + (+sc.getAttribute("data-sc")) * strip.clientWidth * 0.8));
+        strip._to = to; strip.scrollLeft = to; tabEnds(el.querySelector(".tabs"));
+        clearTimeout(strip._toT); strip._toT = setTimeout(function () { strip._to = null; }, 400);
+        return;
+      }
+      if (ev.target.closest("[data-tl]")) {
+        var r = ev.target.closest("[data-tl]").getBoundingClientRect();
+        menu(r.right - 240, r.bottom + 4, p.tabs.map(function (tb, k) {
+          var label = tb.mode === "search" ? "Search: " + tb.search.query : tb.mode === "space" ? "Space: " + baseName(tb.space.path) : (baseName(tb.path) || "This PC");
+          return { label: label + (k === p.active ? "  \u2713" : ""), icon: tb.mode === "search" ? "search" : tb.mode === "space" ? "pie" : tb.path ? "folder" : "pc", run: function () { activateTab(i, k); } };
+        }));
+        return;
+      }
       var tb = ev.target.closest("[data-t]");
       if (tb) { activateTab(i, +tb.getAttribute("data-t")); }
     });
     el.querySelector(".tabs").addEventListener("auxclick", function (ev) { var tb = ev.target.closest("[data-t]"); if (tb && ev.button === 1) { closeTab(i, +tb.getAttribute("data-t")); } });
-    el.querySelector(".tabs").addEventListener("dblclick", function (ev) { if (ev.target.classList.contains("tabs") && !D.body.classList.contains("frameless")) { addTab(i, tabOf(p).path); } });
+    // the mouse wheel scrolls the tabs sideways
+    el.querySelector(".tabs").addEventListener("wheel", function (ev) {
+      var strip = el.querySelector(".tstrip");
+      if (!strip || strip.scrollWidth <= strip.clientWidth) { return; }
+      ev.preventDefault();
+      strip.style.scrollBehavior = "auto";
+      strip.scrollLeft += Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.deltaY;
+      strip.style.scrollBehavior = "";
+    }, { passive: false });
+    // tabs that fit or don't change with the pane's width (window, split view, side panels)
+    if (W.ResizeObserver) { new ResizeObserver(function () { tabsFit(el.querySelector(".tabs"), false); }).observe(el.querySelector(".tabs")); }
+    el.querySelector(".tabs").addEventListener("scroll", function () { tabEnds(el.querySelector(".tabs")); }, true);
+    el.querySelector(".tabs").addEventListener("dblclick", function (ev) { if ((ev.target.classList.contains("tabs") || ev.target.classList.contains("tstrip")) && !D.body.classList.contains("frameless")) { addTab(i, tabOf(p).path); } });
     // bar
     var onBar = function (ev) {
       var b = ev.target.closest("[data-a]");
@@ -4202,8 +4330,19 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     { id: "graphitedk", label: "Crimson", dark: true, sw: "#E6405A" }, { id: "midnight", label: "Midnight", dark: true, sw: "#4C8DF6" },
     { id: "spruce", label: "Spruce", dark: true, sw: "#2BB3A0" }, { id: "aubergine", label: "Aubergine", dark: true, sw: "#9B87F5" },
     { id: "graphite", label: "Graphite", dark: false, sw: "#3B4A5C" }, { id: "harbor", label: "Harbor", dark: false, sw: "#1F4E79" },
-    { id: "sage", label: "Sage", dark: false, sw: "#2E6B57" }, { id: "claret", label: "Claret", dark: false, sw: "#8E2433" }
+    { id: "sage", label: "Sage", dark: false, sw: "#2E6B57" }, { id: "claret", label: "Claret", dark: false, sw: "#8E2433" },
+    // bold: two accents each, drawn by boldLook()
+    { id: "neon", label: "Neon", dark: true, bold: true, bg: "#0c0a1d", fg: "#f3efff", accent: "#ff2e88", accent2: "#00e0ff" },
+    { id: "aurora", label: "Aurora", dark: true, bold: true, bg: "#061419", fg: "#e8fbf6", accent: "#2ef2b3", accent2: "#9b6bff" },
+    { id: "ember", label: "Ember", dark: true, bold: true, bg: "#150b07", fg: "#fff2ea", accent: "#ff6a1f", accent2: "#ffc629" },
+    { id: "ultraviolet", label: "Ultraviolet", dark: true, bold: true, bg: "#0f0719", fg: "#f6efff", accent: "#b46bff", accent2: "#ff4fd2" },
+    { id: "volt", label: "Volt", dark: true, bold: true, bg: "#0a0d0a", fg: "#f1f7ee", accent: "#c4ff1f", accent2: "#19ffd1" },
+    { id: "abyss", label: "Abyss", dark: true, bold: true, bg: "#040d1f", fg: "#eaf1ff", accent: "#3f7dff", accent2: "#00d4ff" },
+    { id: "solar", label: "Solar", dark: false, bold: true, bg: "#fff5ea", fg: "#24160c", accent: "#e8590c", accent2: "#e0315b" },
+    { id: "prism", label: "Prism", dark: false, bold: true, bg: "#f4f1ff", fg: "#1a1530", accent: "#6d28d9", accent2: "#db2777" },
+    { id: "lagoon", label: "Lagoon", dark: false, bold: true, bg: "#ecf8f7", fg: "#0d1f1e", accent: "#0f766e", accent2: "#2563eb" }
   ];
+  THEMES.forEach(function (t) { if (t.bold) { t.sw = t.accent; } });
   /* ---- The Atlas icon: one drawing, in the theme's accent colour --------------------------------- */
   function hexMix(a, b, t) {
     var p = function (h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; };
@@ -4267,7 +4406,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   // Atlas's own dark or light look, coloured from the palette Omarchy gives its terminals and bar, and
   // changed as soon as the Omarchy theme is
   var omarchyPal = null;
-  var OMVARS = ["--bg", "--surface", "--surface-2", "--surface-3", "--line", "--text", "--text-2", "--muted", "--accent", "--accent-soft", "--dark", "--folder"];
+  var OMVARS = ["--bg", "--surface", "--surface-2", "--surface-3", "--line", "--text", "--text-2", "--muted", "--accent", "--accent-soft", "--dark", "--folder", "--accent-2", "--head", "--sel"];
   function hexLum(h) {
     return [1, 3, 5].map(function (i) { var c = parseInt(h.slice(i, i + 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); })
       .reduce(function (n, c, k) { return n + c * [0.2126, 0.7152, 0.0722][k]; }, 0);
@@ -4295,9 +4434,42 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       // folders in the theme's accent, a little brighter than the accent itself so they stand out from the text
       "--folder": readable(hexMix(acc, dark ? "#ffffff" : "#000000", 0.08), bg, dark, 3.5) } };
   }
+  // a bold theme's colours: surfaces tinted with its accent, and the second accent kept readable too
+  function boldLook(th) {
+    var bg = th.bg, fg = th.fg, dark = th.dark;
+    var acc = readable(th.accent, bg, dark, 3), acc2 = readable(th.accent2, bg, dark, 3);
+    var tint = function (c, f, a) { return hexMix(hexMix(bg, fg, f), acc, a); };
+    var a = [1, 3, 5].map(function (i) { return parseInt(acc.slice(i, i + 2), 16); }).join(",");
+    return {
+      "--bg": bg,
+      "--surface": dark ? tint(bg, 0.06, 0.07) : hexMix(hexMix(bg, "#ffffff", 0.7), acc, 0.02),
+      "--surface-2": dark ? tint(bg, 0.09, 0.09) : hexMix(hexMix(bg, "#ffffff", 0.45), acc, 0.03),
+      "--surface-3": dark ? tint(bg, 0.13, 0.11) : hexMix(bg, acc, 0.08),
+      "--line": dark ? tint(bg, 0.18, 0.16) : hexMix(bg, acc, 0.18),
+      "--text": fg, "--text-2": hexMix(fg, bg, 0.12), "--muted": readable(hexMix(hexMix(fg, bg, 0.34), acc, 0.12), bg, dark, 4.5),
+      "--accent": acc, "--accent-2": acc2, "--accent-soft": "rgba(" + a + "," + (dark ? 0.18 : 0.10) + ")", "--dark": dark ? "1" : "0",
+      "--head": "color-mix(in srgb, var(--surface) " + (dark ? 82 : 90) + "%, var(--accent))",
+      "--sel": "color-mix(in srgb, var(--accent) " + (dark ? 24 : 14) + "%, transparent)",
+      "--folder": readable(hexMix(acc, dark ? "#ffffff" : "#000000", 0.06), bg, dark, 3.5)
+    };
+  }
+  function paintTheme(th) {
+    var root = D.documentElement;
+    if (th.bold) {
+      // Atlas's own dark or light look underneath, in this theme's colours
+      root.setAttribute("data-theme", th.dark ? "graphitedk" : "graphite");
+      root.setAttribute("data-look", "bold");
+      var v = boldLook(th);
+      Object.keys(v).forEach(function (k) { root.style.setProperty(k, v[k]); });
+    } else {
+      root.removeAttribute("data-look");
+      root.setAttribute("data-theme", th.id);
+    }
+  }
   function applyOmarchy() {
     if (S.theme !== "omarchy" || !omarchyPal) { return; }
     var look = omarchyLook(omarchyPal), root = D.documentElement;
+    root.removeAttribute("data-look");
     // Atlas's own dark or light theme underneath, for everything that differs between the two
     root.setAttribute("data-theme", look.dark ? "graphitedk" : "graphite");
     Object.keys(look.vars).forEach(function (k) { root.style.setProperty(k, look.vars[k]); });
@@ -4335,7 +4507,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     OMVARS.forEach(function (k) { D.documentElement.style.removeProperty(k); });
     var th = THEMES.filter(function (x) { return x.id === id; })[0] || THEMES[0];
     S.theme = th.id;
-    D.documentElement.setAttribute("data-theme", th.id);
+    paintTheme(th);
     themeHost(th.dark, th.sw);
     save();
   }
@@ -4343,8 +4515,14 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var r = btn.getBoundingClientRect();
     var sys = !OMARCHY ? [] : [{ head: "System" }, { label: "Omarchy" + (omarchyName() ? " (" + omarchyName() + ")" : "") + (S.theme === "omarchy" ? "  \u2713" : ""),
       sw: omarchyPal ? omarchyLook(omarchyPal).accent : "#888888", run: function () { setTheme("omarchy"); } }];
-    menu(r.right + 8, r.bottom - (LINUX ? 400 : 330), sys.concat([{ head: "Dark" }]).concat(THEMES.filter(function (t) { return t.dark; }).map(function (t) { return { label: t.label + (S.theme === t.id ? "  \u2713" : ""), sw: t.sw, run: function () { setTheme(t.id); } }; }))
-      .concat([{ head: "Light" }]).concat(THEMES.filter(function (t) { return !t.dark; }).map(function (t) { return { label: t.label + (S.theme === t.id ? "  \u2713" : ""), sw: t.sw, run: function () { setTheme(t.id); } }; })));
+    var group = function (head, pick) {
+      return [{ head: head }].concat(THEMES.filter(pick).map(function (t) {
+        return { label: t.label + (S.theme === t.id ? "  \u2713" : ""), sw: t.bold ? "linear-gradient(135deg, " + t.accent + ", " + t.accent2 + ")" : t.sw, run: function () { setTheme(t.id); } };
+      }));
+    };
+    // two columns' worth: the menu sits beside the button, as low as the window allows
+    menu(r.right + 8, r.bottom, sys.concat(group("Bold", function (t) { return t.bold && t.dark; })).concat(group("Bold light", function (t) { return t.bold && !t.dark; }))
+      .concat(group("Dark", function (t) { return !t.bold && t.dark; })).concat(group("Light", function (t) { return !t.bold && !t.dark; })));
   }
 
   /* ================================================================================================
@@ -4593,6 +4771,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
      Start
      ================================================================================================ */
   D.documentElement.setAttribute("data-theme", S.theme);
+  (function () { var th = THEMES.filter(function (x) { return x.id === S.theme && x.bold; })[0]; if (th) { paintTheme(th); } })();
   // anything that goes wrong is shown, so it can be reported
   var errSeen = {};
   var showErr = function (msg) { msg = String(msg || "Unknown error"); if (errSeen[msg]) { return; } errSeen[msg] = 1; try { toast("Atlas hit an error: " + msg, { bad: true }); } catch (e) { } };
