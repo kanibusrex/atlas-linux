@@ -133,6 +133,8 @@ APPIMAGETOOL=/path/to/appimagetool ./build-appimage.sh   # writes dist/Atlas-x86
 
 The first build fetches pywebview (pinned in `requirements.txt`) into `lib/`. After that you can run Atlas straight from the source: `python3 atlas.py [folder]` (`ATLAS_DEBUG=1` prints the page's console).
 
+To release, bump `VERSION` in `atlas.py`, commit, and run `./release.sh notes.md`. It waits for main's build, makes the release as a draft with the AppImage, and the tag's build attaches the Windows and Mac files and then publishes it, so no Atlas is offered an update before its file is there.
+
 | File | What it is |
 |---|---|
 | `atlas.py` | The window (pywebview), the bridge the page talks to, the copy queue, and the local server for previews, icons and thumbnails |
@@ -145,6 +147,7 @@ The first build fetches pywebview (pinned in `requirements.txt`) into `lib/`. Af
 | `atlas_update.py` | Looking for a new version on GitHub, and putting it in place |
 | `tests/smoke_core.py` | A quick check of the file work on the system it runs on |
 | `tests/update_check.py` | Tries an update from the newest release, somewhere it can't hurt |
+| `release.sh` | Releases the version in `atlas.py` (see above) |
 | `atlas.html` | The whole interface |
 
 Settings and saved choices (favourites, tabs, theme) are kept in `~/.local/share/atlas`; thumbnails in `~/.cache/atlas/thumbs`.

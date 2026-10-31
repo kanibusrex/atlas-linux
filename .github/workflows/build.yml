@@ -1,5 +1,5 @@
 # Builds Atlas for Windows (an installer) and macOS (a disk image) on every push, checks the file work on
-# each, starts the app and takes pictures of it. A v* tag also attaches both to that tag's release.
+# each, starts the app and takes pictures of it. A v* tag attaches both to that tag's draft release, then publishes it.
 name: Build
 
 on:
@@ -133,3 +133,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ github.ref_name }}" dist/Atlas-*-mac-arm64.dmg
+
+  # A release is made as a draft (release.sh), so nobody is offered it before every system's file is on it;
+  # once both builds have attached theirs, and the AppImage is there, it goes out as the newest release.
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Publish the release once it has all three files
+        run: |
+          if [ "$(gh release view "$TAG" --json isDraft -q .isDraft)" != "true" ]; then echo "$TAG is already published"; exit 0; fi
+          names=$(gh release view "$TAG" --json assets -q '.assets[].name')
+          v=${TAG#v}
+          for want in "Atlas-x86_64.AppImage" "Atlas-$v-windows-x64-setup.exe" "Atlas-$v-mac-arm64.dmg"; do
+            grep -qxF "$want" <<<"$names" || { echo "::error::$want isn't on the $TAG draft yet; attach it, then: gh release edit $TAG --draft=false --latest"; exit 1; }
+          done
+          gh release edit "$TAG" --draft=false --latest
+          echo "Published $TAG"
