@@ -259,6 +259,11 @@ def bad_name(_n):
 
 
 def listing(_full, out):
+    """A folder's listing as the page is given it: apps (Safari.app) are one thing to open, as in Finder,
+    not folders to go into."""
+    for e in out.get("entries", []):
+        if e["d"] and e["n"].lower().endswith(".app"):
+            e["d"] = False
     return out
 
 

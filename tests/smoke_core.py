@@ -111,6 +111,11 @@ try:
     r = run("delete", paths=[os.path.join(box, "c")], permanent=True)
     check("delete for good", r.get("removed") == 1 and not os.path.exists(os.path.join(box, "c")), r)
 
+    if sys.platform == "darwin":
+        r = run("list", path="/Applications")
+        apps = [e for e in r.get("entries", []) if e["n"].endswith(".app")]
+        check("apps are listed as apps, not folders", apps and not any(e["d"] for e in apps), r.get("entries", [])[:5])
+
     if sys.platform == "win32":
         r = run("list", path=top[:2])
         check("C: is read as C:\\", r.get("path", "").endswith(":\\") and not r.get("error"), r)
