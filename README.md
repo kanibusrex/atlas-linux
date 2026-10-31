@@ -114,7 +114,8 @@ The first build fetches pywebview (pinned in `requirements.txt`) into `lib/`. Af
 |---|---|
 | `atlas.py` | The window (pywebview), the bridge the page talks to, the copy queue, and the local server for previews, icons and thumbnails |
 | `atlas_linux.py` | What Atlas asks of the Linux desktop: drives and shares through GVFS, the clipboard, icons, Open with, D-Bus, the Omarchy theme |
-| `atlas_core.py` | File operations: listing, search, copy, Trash, archives, permissions, network places |
+| `atlas_core.py` | File operations that work the same everywhere: listing, search, copy, rename, archives, hashes, permissions |
+| `atlas_core_linux.py` | File work that is Linux's own: drives, GVFS network places, the Trash, what's using a file, the wallpaper |
 | `atlas.html` | The whole interface |
 
 Settings and saved choices (favourites, tabs, theme) are kept in `~/.local/share/atlas`; thumbnails in `~/.cache/atlas/thumbs`.

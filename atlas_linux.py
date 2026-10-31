@@ -566,7 +566,7 @@ class Desktop:
         dlg = Gtk.FileChooserNative.new("Save as", self.gtkwin, Gtk.FileChooserAction.SAVE, "_Save", "_Cancel")
         dlg.set_current_name(name)
         dlg.set_do_overwrite_confirmation(True)
-        docs = core.xdg_dir("DOCUMENTS")
+        docs = core.user_dir("DOCUMENTS")
         if os.path.isdir(docs):
             dlg.set_current_folder(docs)
         if dlg.run() != Gtk.ResponseType.ACCEPT:

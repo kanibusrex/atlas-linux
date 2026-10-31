@@ -88,12 +88,6 @@ TYPES = {
 }
 VIDEO = (".mp4", ".mkv", ".webm", ".mov", ".avi", ".m4v", ".wmv", ".flv", ".mpg", ".mpeg", ".ts", ".3gp", ".ogv")
 
-# requests the file work answers, each in a thread of its own
-CORE_OPS = ("list", "drives", "search", "sizes", "children", "rename", "mkdir", "newfile", "delete",
-            "conflicts", "readtext", "details", "recyclable", "hash", "compare", "zip", "unzip", "zipopen", "smbshares", "restore", "emptytrash",
-            "perms", "chperm", "inuse", "endprogram", "wallpaper", "moveback")
-
-
 def to_json(v):
     # all ASCII: pywebview on GTK gives WebKit a script's length in characters, where it means bytes,
     # so anything after a "…" or an accented name would be cut off
@@ -293,7 +287,8 @@ class Host:
             self.reply(rid, error=str(e) or e.__class__.__name__)
 
     def receive(self, rid, op, m):
-        if op in core.WINDOWS_ONLY or op in CORE_OPS:
+        # the file work: each request in a thread of its own (copies wait their turn in the copy queue, below)
+        if core.handles(op) and op != "copy":
             j = Job(rid, op, m)
             self.jobs[rid] = j
             j.thread.start()
