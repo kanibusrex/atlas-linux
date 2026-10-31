@@ -35,4 +35,7 @@ try {
 } finally {
   "---- atlas.log"
   Get-Content $env:ATLAS_LOG -ErrorAction SilentlyContinue
+  "---- Windows' record of programs that failed, from the last few minutes"
+  Get-WinEvent -FilterHashtable @{ LogName = "Application"; StartTime = (Get-Date).AddMinutes(-10) } -ErrorAction SilentlyContinue |
+    Where-Object { $_.ProviderName -in ".NET Runtime", "Application Error" } | ForEach-Object { $_.Message; "" }
 }

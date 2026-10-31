@@ -25,6 +25,20 @@ jobs:
       - name: Check the file work
         run: python tests/smoke_core.py
 
+      # from the source, with a console: if the built app fails, this says whether it's the app or the build
+      - name: Start it from the source
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $env:ATLAS_DEBUG = "1"
+          $p = Start-Process python -ArgumentList "atlas.py", "C:\Windows" -PassThru -RedirectStandardError source-err.txt -RedirectStandardOutput source-out.txt
+          Start-Sleep 20
+          $alive = -not $p.HasExited
+          if ($alive) { Stop-Process -Id $p.Id -Force }
+          "still running after 20 s: $alive"
+          Get-Content source-err.txt, source-out.txt -ErrorAction SilentlyContinue
+          if (-not $alive) { exit 1 }
+
       - name: Build Atlas.exe
         run: >
           pyinstaller --noconfirm --windowed --name Atlas --icon atlas.ico

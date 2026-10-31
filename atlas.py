@@ -30,6 +30,14 @@ import time
 import traceback
 import urllib.parse
 
+# ATLAS_LOG=file: errors (and with ATLAS_DEBUG, what went wrong where) go there, for the Windows app,
+# which has no console. Set before anything else is loaded, so pywebview's own messages go there too, and
+# a crash leaves its traceback. Not stdout: a picker gives its answer there.
+if os.environ.get("ATLAS_LOG"):
+    import faulthandler
+    sys.stderr = open(os.environ["ATLAS_LOG"], "a", encoding="utf-8", buffering=1)
+    faulthandler.enable(sys.stderr)
+
 HERE = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.abspath(__file__))   # beside it, or in the built app
 sys.path.insert(0, HERE)
 # pywebview, and what it needs, come with Atlas (build-appimage.sh puts them in lib)
@@ -642,10 +650,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def main():
-    # ATLAS_LOG=file: errors (and with ATLAS_DEBUG, what went wrong where) go there, for the Windows app,
-    # which has no console. Not stdout: a picker gives its answer there.
-    if os.environ.get("ATLAS_LOG"):
-        sys.stderr = open(os.environ["ATLAS_LOG"], "a", encoding="utf-8", buffering=1)
     pick = None
     args = sys.argv[1:]
     if len(args) > 1 and args[0] == "--pick":
