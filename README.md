@@ -56,6 +56,11 @@ One Trash view for your home Trash and every mounted drive's own, showing where 
 - Can be the **default file manager**: folders open in it, and "Show in folder" from browsers and other apps selects the file in Atlas.
 - Ctrl+= / Ctrl+- / Ctrl+0 make everything bigger or smaller.
 
+### Picking files for other apps
+- Can be the **file picker** other apps use: "Open" and "Save as" in browsers, Flatpaks and other portal-aware apps bring up an Atlas window, with the app's file types to choose from.
+- Double-click or Enter picks a file (a folder is gone into); when saving, clicking a file takes its name, and replacing one asks first. Escape or Cancel backs out.
+- Each picker is its own window (class `dev.atlas.Atlas.Picker`), so your open Atlas is left alone. It starts in the folder the app gave, or the one you last picked from.
+
 ## Install
 
 Download `Atlas-x86_64.AppImage` from the [latest release](https://github.com/kanibusrex/atlas-linux/releases/latest), then from a clone of this repo:
@@ -63,7 +68,10 @@ Download `Atlas-x86_64.AppImage` from the [latest release](https://github.com/ka
 ```sh
 ./install.sh ~/Downloads/Atlas-x86_64.AppImage            # app launcher entry
 ./install.sh ~/Downloads/Atlas-x86_64.AppImage --default  # ...and make it the default file manager
+./install.sh ~/Downloads/Atlas-x86_64.AppImage --picker   # ...and the file picker other apps use
 ```
+
+`--picker` registers Atlas with xdg-desktop-portal as its FileChooser (in `~/.local/share/xdg-desktop-portal/portals/atlas.portal`, and `org.freedesktop.impl.portal.FileChooser=atlas;gtk` in `~/.config/xdg-desktop-portal/<desktop>-portals.conf`). Chromium, Electron apps and Flatpaks use the portal already; GTK 3 apps need `GTK_USE_PORTAL=1` in their environment, GTK 4 apps `GDK_DEBUG=portals`, and Firefox `widget.use-xdg-desktop-portal.file-picker` = `1` in `about:config`. To undo it, delete that line from the portals.conf and restart `xdg-desktop-portal`.
 
 Or just run the AppImage: `chmod +x Atlas-x86_64.AppImage && ./Atlas-x86_64.AppImage`.
 
@@ -91,6 +99,8 @@ A key to open (or focus) Atlas, in `~/.config/hypr/bindings.lua`:
 ```lua
 o.bind("SUPER + A", "Atlas", "omarchy-launch-or-focus dev.atlas.Atlas \"uwsm-app -- " .. os.getenv("HOME") .. "/Applications/Atlas-x86_64.AppImage\"")
 ```
+
+To try the picker without installing it: `python3 atlas.py --pick '{"mode": "open", "multiple": true}'` prints what you chose as JSON (`mode` is `open`, `save` or `savefiles`).
 
 ## Build
 

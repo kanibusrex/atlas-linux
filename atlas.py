@@ -9,6 +9,7 @@ take a while runs in a background thread, so the window never freezes, and its p
 to the page as it goes. atlas_core.py holds the file operations.
 
 Run:   python3 atlas.py [folder]
+       python3 atlas.py --pick '{"mode": "open"}'   a window for choosing files, for another app (see atlas_portal.py)
 Its settings and browser profile are kept in ~/.local/share/atlas.
 """
 
@@ -32,10 +33,11 @@ sys.path.insert(0, HERE)
 import atlas_core as core  # noqa: E402
 
 APP_ID = "dev.atlas.Atlas"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 DATA_DIR = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "atlas")
 PAGE = os.path.join(HERE, "atlas.html")
 BG = "#1a1b1e"
+PICK_STATE = os.path.join(DATA_DIR, "pick.json")   # the folder last picked from, for the next picker
 
 # what the page is given before its own script runs: the window.chrome.webview it talks to on Windows
 BRIDGE = r"""
@@ -145,8 +147,21 @@ class Copy:
 
 
 class AtlasWindow(Gtk.ApplicationWindow):
-    def __init__(self, app, start):
+    def __init__(self, app, start, pick=None):
         super().__init__(application=app, title="Atlas")
+        # choosing files for another app: what it asked for (mode, filters, folder, name...); the answer goes to stdout.
+        # It starts in the folder the app gave, or the one last picked from, or home.
+        self.pick = pick
+        if pick:
+            start = pick.get("folder") or ""
+            if not os.path.isdir(start):
+                try:
+                    with open(PICK_STATE) as f:
+                        start = json.load(f).get("folder") or ""
+                except (OSError, ValueError, AttributeError):
+                    start = ""
+            if not os.path.isdir(start):
+                start = os.path.expanduser("~")
         # folders asked for before the page has loaded wait for it (Atlas started by "Show in folder")
         self.page_ready, self.pending_open = False, []
         # a file to start on is shown in its folder, selected
@@ -190,9 +205,13 @@ class AtlasWindow(Gtk.ApplicationWindow):
         except (OSError, ValueError):
             pass
 
-        self.set_default_size(int(self.prefs["W"]), int(self.prefs["H"]))
+        if pick:
+            self.set_default_size(min(int(self.prefs["W"]), 1100), min(int(self.prefs["H"]), 700))
+            self.set_title(pick.get("title") or ("Save" if pick.get("mode") != "open" else "Open"))
+        else:
+            self.set_default_size(int(self.prefs["W"]), int(self.prefs["H"]))
         self.set_size_request(760, 480)
-        if self.prefs.get("Max"):
+        if self.prefs.get("Max") and not pick:
             self.maximize()
         ico = os.path.join(HERE, "atlas.png")
         if os.path.exists(ico):
@@ -243,6 +262,8 @@ class AtlasWindow(Gtk.ApplicationWindow):
         q = "?path=" + urllib.parse.quote(os.path.abspath(start), safe="") if start else ""
         if start and self.start_select:
             q += "&select=" + urllib.parse.quote(self.start_select, safe="")
+        if pick:
+            q += ("&" if q else "?") + "pick=" + urllib.parse.quote(json.dumps(pick), safe="")
         self.view.load_uri("atlas://app/atlas.html" + q)
         GLib.timeout_add(50, self.tick)
         self.was_max = None
@@ -375,7 +396,25 @@ class AtlasWindow(Gtk.ApplicationWindow):
             self.prefs["Dark"] = bool(m.get("dark"))
             Gtk.Settings.get_default().props.gtk_application_prefer_dark_theme = self.prefs["Dark"]
             return self.reply(rid, True)
+        if op == "picked":
+            # the answer for the app that asked; closing the window without one is a cancel
+            if self.pick and not self.pick.get("done"):
+                self.pick["done"] = True
+                paths = [str(p) for p in m.get("paths") or []]
+                sys.stdout.write(json.dumps({"paths": paths, "filter": m.get("filter")}) + "\n")
+                sys.stdout.flush()
+                if paths:
+                    last = paths[0] if self.pick.get("directory") or self.pick.get("mode") == "savefiles" else os.path.dirname(paths[0])
+                    try:
+                        with open(PICK_STATE, "w") as f:
+                            json.dump({"folder": last}, f)
+                    except OSError:
+                        pass
+            self.reply(rid, True)
+            return self.close()
         if op == "title":
+            if self.pick:
+                return self.reply(rid, True)
             t = str(m.get("text") or "")
             self.set_title(t + " - Atlas" if t else "Atlas")
             return self.reply(rid, True)
@@ -914,11 +953,13 @@ class AtlasWindow(Gtk.ApplicationWindow):
             w, h = self.get_size()
             self.prefs["W"], self.prefs["H"] = w, h
         self.prefs["Max"] = self.is_maximized()
-        try:
-            with open(self.prefs_path, "w") as f:
-                json.dump(self.prefs, f)
-        except OSError:
-            pass
+        # a picker leaves Atlas's saved window size and zoom as they were
+        if not self.pick:
+            try:
+                with open(self.prefs_path, "w") as f:
+                    json.dump(self.prefs, f)
+            except OSError:
+                pass
         for mon in self.monitors.values():
             mon.cancel()
         # give a cancelled copy a moment to remove its part-copied file
@@ -949,13 +990,18 @@ class AtlasApp(Gtk.Application):
     """Atlas runs once per person. Opened again (from the launcher, or with a folder), it passes the folder
     to the window already open, which comes to the front and opens the folder in a new tab."""
 
-    def __init__(self):
-        super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
+    def __init__(self, pick=None):
+        # a picker is a window of its own, apart from the Atlas that may be open
+        flags = Gio.ApplicationFlags.HANDLES_COMMAND_LINE | (Gio.ApplicationFlags.NON_UNIQUE if pick else 0)
+        super().__init__(application_id=APP_ID, flags=flags)
         self.win = None
         self.fm1 = 0
+        self.pick = pick
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
+        if self.pick:
+            return
         # only the Atlas that is running answers; a second one passes its folder on and leaves
         self.fm1 = Gio.bus_own_name(Gio.BusType.SESSION, "org.freedesktop.FileManager1", Gio.BusNameOwnerFlags.NONE,
                                     self.on_bus, None, None)
@@ -981,11 +1027,14 @@ class AtlasApp(Gtk.Application):
 
     def window_for(self, path):
         if not self.win:
-            self.win = AtlasWindow(self, path)
+            self.win = AtlasWindow(self, path, self.pick)
             self.win.show_all()
         return self.win
 
     def do_command_line(self, cmd):
+        if self.pick:
+            self.window_for("")   # the page starts in the folder asked for, or the last one picked from
+            return 0
         args = cmd.get_arguments()[1:]
         cwd = cmd.get_cwd() or os.getcwd()
         path = ""
@@ -1002,6 +1051,14 @@ class AtlasApp(Gtk.Application):
 
 
 if __name__ == "__main__":
-    GLib.set_prgname(APP_ID)   # the window's app id, as Hyprland and the launcher see it
+    pick = None
+    if len(sys.argv) > 2 and sys.argv[1] == "--pick":
+        try:
+            pick = json.loads(sys.argv[2])
+        except ValueError:
+            sys.exit("--pick needs JSON, like '{\"mode\": \"open\"}'")
+        sys.argv = sys.argv[:1]
+    # the window's app id, as Hyprland and the launcher see it (a picker has its own, so it can float)
+    GLib.set_prgname(APP_ID + ".Picker" if pick else APP_ID)
     GLib.set_application_name("Atlas")
-    sys.exit(AtlasApp().run(sys.argv))
+    sys.exit(AtlasApp(pick).run(sys.argv))

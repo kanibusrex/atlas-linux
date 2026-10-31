@@ -88,6 +88,33 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .panes { display: grid; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); gap: 8px; min-width: 0; min-height: 0; }
 .panes.dual { grid-template-columns: 1fr 1fr; }
 
+/* ---- Choosing files for another app: the bar along the bottom ------------------------------------- */
+#app.picking { grid-template-rows: minmax(0, 1fr) auto; }
+.pickbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--bg); border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.pickbar[hidden] { display: none; }
+/* a picker keeps to the essentials: places and drives, the path, the list, and this bar */
+#app.picking .side { width: 190px; }
+#app.picking #sideTools, #app.picking .side-pin, #app.picking .tabs, #app.picking .mill, #app.picking .chips, #app.picking .status, #app.picking .preview,
+#app.picking [data-a=mill], #app.picking [data-a=fav], #app.picking [data-a=filters], #app.picking [data-a=more], #app.picking [data-a=refresh], #app.picking [data-a=emptytrash] { display: none !important; }
+/* and only Name, Modified and Size (Folder too, when searching) */
+#app.picking .cols .cx, #app.picking .cols .ca { display: none; }
+#app.picking .cols { grid-template-columns: minmax(170px, 1fr) 150px 82px; }
+#app.picking .cols.srch { grid-template-columns: minmax(150px, 1fr) minmax(120px, .8fr) 150px 82px; }
+@container (max-width: 700px) {
+  #app.picking .cols { grid-template-columns: minmax(140px, 1fr) 76px; }
+  #app.picking .cols.srch { grid-template-columns: minmax(120px, 1fr) minmax(90px, .7fr) 76px; }
+}
+.pickbar .pk-t { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; color: var(--text-2); font-size: 12.5px; }
+.pickbar .pk-t span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pickbar .pk-t .ico { color: var(--accent); }
+.pickbar.save .pk-t { flex: 0 1 auto; max-width: 30%; }
+.pickbar input, .pickbar select { height: 30px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); outline: 0; font: inherit; font-size: 12.5px; }
+.pickbar input { flex: 1; min-width: 140px; }
+.pickbar select { max-width: 240px; }
+.pickbar input:focus, .pickbar select:focus { border-color: var(--accent); }
+.pickbar .btn { height: 30px; }
+.pickbar .btn:disabled { opacity: .5; cursor: default; filter: none; }
+
 /* ---- A pane: tabs, bar, list, status -------------------------------------------------------------- */
 .pane { container-type: inline-size; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: var(--radius); overflow: hidden; }
 .panes.dual .pane.active { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
@@ -851,7 +878,7 @@ body.frameless .side-pin { padding-top: 12px; }
 .ritem::before, .ritem.on::before { content: none; display: none; }
 
 /* drop-down lists drawn in the theme's colours, not the system's */
-.fld select { -webkit-appearance: none; appearance: none; background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 14px; color: var(--text); padding-right: 30px; }
+.fld select, .pickbar select { -webkit-appearance: none; appearance: none; background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 14px; color: var(--text); padding-right: 30px; }
 .fld select option { background: var(--surface); color: var(--text); }
 /* Markdown and code in the preview, and the permissions grid */
 .pv-md { white-space: normal; font: 13px/1.55 var(--font); color: var(--text-2); }
@@ -896,6 +923,13 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       <div class="pv-body" id="pvBody"></div>
     </aside>
   </main>
+  <div class="pickbar" id="pickbar" hidden>
+    <div class="pk-t"><svg class="ico" viewBox="0 0 24 24"><use href="#i-open"/></svg><span id="pkTitle"></span></div>
+    <input id="pkName" spellcheck="false" aria-label="File name" hidden>
+    <select id="pkFilter" aria-label="Show" hidden></select>
+    <button class="btn" id="pkCancel">Cancel</button>
+    <button class="btn pri" id="pkOk">Open</button>
+  </div>
 </div>
 <div class="wtop" id="wtop" hidden><i data-hit="13" style="left:0;width:10px;cursor:nwse-resize"></i><i data-hit="12" style="left:10px;right:10px;cursor:ns-resize"></i><i data-hit="14" style="right:0;width:10px;cursor:nesw-resize"></i></div>
 <div class="wctl" id="wctl" hidden>
@@ -1037,6 +1071,10 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   }
   if (host) { host.addEventListener("message", onHost); }
 
+  // choosing files for another app (atlas.py --pick): what it asked for; see "Choosing files" below
+  var PICK = null;
+  try { PICK = JSON.parse(new URLSearchParams(location.search).get("pick") || "null"); } catch (e) { }
+
   /* ---- Saved choices ----------------------------------------------------------------------------- */
   var KEY = "fileDesk.v1";
   var S = { theme: "graphitedk", favs: [], groups: [], recent: [], servers: [], shares: [], hidden: false, dual: false, preview: true, side: true, mill: true, pvPos: "bottom", pvH: 200, session: null };
@@ -1046,6 +1084,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   S.side = true;   // the side bar is always there when Atlas opens (Ctrl+B still hides it for a while)
   var saveT = 0;
   function save() {
+    if (PICK) { return; }   // a picker's tabs and toggles are its own, and go when it closes
     clearTimeout(saveT);
     saveT = setTimeout(function () {
       S.session = { dual: S.dual, active: activePane, panes: panes.map(function (p) {
@@ -1519,6 +1558,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   /* ---- What a tab shows: its entries filtered and sorted --------------------------------------------- */
   var DAY = 864e5;
   function passes(t, e) {
+    if (PICK && !pickPasses(e)) { return false; }
     if (!S.hidden && isHidden(e) && t.mode !== "search") { return false; }
     if (t.filter && t.mode === "folder") {
       var words = t.filter.toLowerCase().split(/\s+/).filter(Boolean), n = e.n.toLowerCase();
@@ -2053,6 +2093,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     box.innerHTML = "<span>" + shown + "</span>" + (sel.length ? "<span><b>" + sel.length + " selected</b>" + (bytes ? ", " + fmtSize(bytes) : "") + (bytes && folders && !sel.every(function (e) { return !e.d || t.sizes[e.p] != null; }) ? " plus folders" : "") + "</span>" : "") +
       (cutSet.size ? "<span>" + plural(cutSet.size, "item") + " cut, ready to paste</span>" : "") +
       "<span class='grow'></span>" + (t.loading ? "<span class='spin'></span>" : "") + "<span>" + esc(free) + "</span>";
+    if (PICK) { pickPaint(); }
   }
 
   /* ================================================================================================
@@ -2066,6 +2107,14 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
         "<span class='lbl'>" + esc(label) + (sub ? "<span class='sub'>" + sub + "</span>" : "") + "</span></button>";
     };
     var card = function (title, body, extra, btns) { return "<div class='sgroup'" + (extra || "") + ">" + (title ? "<div class='shead'><span>" + esc(title) + "</span>" + (btns || "") + "</div>" : "") + body + "</div>"; };
+    if (PICK) {
+      var ph = card("", places.map(function (pl) { return item(pl.path, pl.name, "", PLACEICON[pl.name] || "folder"); }).join(""));
+      if (S.favs.length) { ph += card("Favourites", S.favs.map(function (f) { return item(f, baseName(f), "", "starf"); }).join("")); }
+      ph += card("Drives", drives.map(function (d) { return item(d.path, driveName(d), "", d.type === "Network" ? "net" : "drive"); }).join(""));
+      $("sidePin").innerHTML = "";
+      $("sideScroll").innerHTML = ph;
+      return;
+    }
     var pin = card("Drives", drives.length ? drives.map(function (d) {
       var used = d.total ? (d.total - d.free) / d.total : 0;
       var name = LINUX ? driveName(d) : d.path.slice(0, 2) + (d.label ? " " + d.label : d.type === "Network" ? " Network" : d.type === "Removable" ? " USB" : "");
@@ -2422,6 +2471,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   }
   function openItem(t, e, where) {
     if (!e) { return; }
+    if (PICK && !e.d && !inZip(t)) { pickAccept([e]); return; }
     if (inZip(t) && !e.d) { openInZip(t, e); return; }
     if (isZipFile(e) && !where) { openPath(t, e.p); return; }
     if (e.d) {
@@ -2435,6 +2485,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   function openSelected(t) {
     var sel = selected(t);
     if (!sel.length && t.focus >= 0) { sel = [viewOf(t)[t.focus]]; }
+    if (PICK && !inZip(t)) { if (sel.length === 1 && sel[0].d) { openPath(t, sel[0].p); } else { pickAccept(sel.length ? sel : null); } return; }
     if (!sel.length) { return; }
     if (inZip(t)) { sel.slice(0, 8).forEach(function (e) { openItem(t, e); }); return; }
     if (sel.length === 1 && isZipFile(sel[0])) { openPath(t, sel[0].p); return; }
@@ -3897,6 +3948,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var i = activePane, p = curPane(), t = tabOf(p);
     var inField = ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "SELECT" || ev.target.tagName === "TEXTAREA");
     var k = ev.key, ctrl = ev.ctrlKey || ev.metaKey;
+    // a picker has no tabs, second pane, preview, folder columns or command palette to open
+    if (PICK && (ctrl && /^[tTkKpPbBmM\\]$/.test(k) || (k === " " && !inField))) { ev.preventDefault(); return; }
     // anywhere
     if (ctrl && (k === "k" || k === "K") || (ctrl && ev.shiftKey && (k === "p" || k === "P"))) { ev.preventDefault(); palette(); return; }
     if (ctrl && !ev.shiftKey && (k === "z" || k === "Z") && !inField) { ev.preventDefault(); undo(); return; }
@@ -3938,7 +3991,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     else if (k === "Enter" && ev.altKey) { ev.preventDefault(); var s0 = selPaths(t); if (s0.length || t.path) { showProps(s0.length ? s0 : [t.path]); } }
     else if (k === "Enter") { ev.preventDefault(); if (ctrl) { var f0 = selected(t)[0]; if (f0 && f0.d) { openItem(t, f0, "tab"); } } else { openSelected(t); } }
     else if (k === "Backspace") { ev.preventDefault(); if (t.mode === "search") { openPath(t, t.path, { keep: true, replace: true }); } else { goUp(t); } }
-    else if (k === "Escape") { if (t.mode === "search") { openPath(t, t.path, { keep: true, replace: true }); } else if (cutSet.size) { cutSet = new Set(); repaintAll(); } else if (t.filter) { t.filter = ""; t.viewCache = null; paintPane(i); } else { t.sel = new Set(); paintList(i); paintStatus(i); paintPreview(); } }
+    else if (k === "Escape") { if (t.mode === "search") { openPath(t, t.path, { keep: true, replace: true }); } else if (cutSet.size) { cutSet = new Set(); repaintAll(); } else if (t.filter) { t.filter = ""; t.viewCache = null; paintPane(i); } else if (PICK && !t.sel.size) { pickCancel(); } else { t.sel = new Set(); paintList(i); paintStatus(i); paintPreview(); } }
     else if (k === "F2") { ev.preventDefault(); startRename(t); }
     else if (k === "Delete") { ev.preventDefault(); deleteItems(t, ev.shiftKey); }
     else if (ctrl && (k === "a" || k === "A")) { ev.preventDefault(); selectAll(i); }
@@ -4390,6 +4443,107 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   }
 
   /* ================================================================================================
+     Choosing files for another app: Atlas as the file picker (atlas_portal.py asks, atlas.py --pick)
+     Double-click or Enter picks a file; a folder is gone into. The answer goes back through "picked";
+     Cancel, Escape or closing the window answers nothing.
+     ================================================================================================ */
+  var pickFilter = -1, pickRe = {}, pickSelKey = "";
+  function globRe(g) {
+    var out = "", k = 0;
+    while (k < g.length) {
+      var c = g[k];
+      if (c === "*") { out += ".*"; } else if (c === "?") { out += "."; }
+      else if (c === "[" && g.indexOf("]", k + 2) > k) { var j = g.indexOf("]", k + 2); out += "[" + g.slice(k + 1, j).replace(/^!/, "^").replace(/\\/g, "\\\\") + "]"; k = j; }
+      else { out += c.replace(/[.+^${}()|[\]\\\/]/g, "\\$&"); }
+      k++;
+    }
+    return out;
+  }
+  function pickPasses(e) {
+    if (e.d) { return true; }
+    if (PICK.directory || PICK.mode === "savefiles") { return false; }
+    var f = PICK.filters && PICK.filters[pickFilter];
+    if (!f || !f[1]) { return true; }
+    if (!pickRe[pickFilter]) {
+      try { pickRe[pickFilter] = new RegExp("^(?:" + f[1].map(globRe).join("|") + ")$", "i"); } catch (err) { pickRe[pickFilter] = /^/; }
+    }
+    return pickRe[pickFilter].test(e.n);
+  }
+  // somewhere real to pick from or save into (not This PC, the Trash or inside an archive)
+  function pickHere(t) { return !!t.path && (t.mode === "folder" || t.mode === "search") && !t.isTrash && !inZip(t); }
+  function pickStart() {
+    D.getElementById("app").classList.add("picking");
+    var bar = $("pickbar"), save = PICK.mode !== "open";
+    bar.hidden = false;
+    bar.classList.toggle("save", PICK.mode === "save");
+    $("pkTitle").textContent = PICK.title || (PICK.mode === "open" ? (PICK.directory ? "Choose a folder" : PICK.multiple ? "Choose files" : "Choose a file") : PICK.mode === "save" ? "Save as" : "Choose a folder to save in");
+    bar.querySelector(".pk-t use").setAttribute("href", save || PICK.directory ? "#i-folder" : "#i-open");
+    $("pkOk").textContent = PICK.accept || (PICK.mode === "save" ? "Save" : PICK.mode === "savefiles" ? "Save here" : PICK.directory ? "Choose" : "Open");
+    var nm = $("pkName");
+    nm.hidden = PICK.mode !== "save";
+    nm.value = PICK.name || "";
+    nm.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter") { ev.preventDefault(); pickAccept(); }
+      else if (ev.key === "Escape") { ev.preventDefault(); pickCancel(); }
+      ev.stopPropagation();
+    });
+    var fl = $("pkFilter"), fs = PICK.filters || [];
+    if (fs.length > 1 || (fs.length === 1 && fs[0][1])) {
+      pickFilter = Math.min(PICK.current || 0, fs.length - 1);
+      fl.hidden = PICK.directory || PICK.mode === "savefiles";
+      fl.innerHTML = fs.map(function (f, k) { return "<option value='" + k + "'>" + esc(f[0]) + "</option>"; }).join("");
+      fl.value = String(pickFilter);
+      fl.onchange = function () { pickFilter = +fl.value; panes.forEach(function (p) { p.tabs.forEach(function (t) { t.viewCache = null; }); }); repaintAll(); };
+    }
+    $("pkCancel").onclick = pickCancel;
+    $("pkOk").onclick = function () { pickAccept(); };
+    if (PICK.mode === "save") { setTimeout(function () { nm.focus(); var dot = nm.value.lastIndexOf("."); nm.setSelectionRange(0, dot > 0 ? dot : nm.value.length); }, 60); }
+  }
+  // the bar follows the selection: a file clicked while saving gives its name
+  function pickPaint() {
+    var t = cur(), sel = selected(t), key = sel.map(function (e) { return e.p; }).join("\n");
+    if (PICK.mode === "save" && key !== pickSelKey && sel.length === 1 && !sel[0].d) { $("pkName").value = sel[0].n; }
+    pickSelKey = key;
+    var ok = pickHere(t);
+    if (PICK.mode === "open" && !PICK.directory) { ok = ok && sel.some(function (e) { return !e.d; }) || (sel.length === 1 && sel[0].d); }
+    if (PICK.mode === "save" && t.mode === "search") { ok = false; }
+    $("pkOk").disabled = !ok;
+  }
+  function pickAccept(items) {
+    var t = cur();
+    if (!pickHere(t)) { return; }
+    var sel = items || selected(t), paths;
+    if (PICK.mode === "save") {
+      if (items && items.length === 1 && !items[0].d) { $("pkName").value = items[0].n; }
+      var name = $("pkName").value.trim();
+      if (!name || name === "." || name === "..") { $("pkName").focus(); return; }
+      if (name.indexOf("/") !== -1) { toast("A file name can't have / in it.", { bad: true }); $("pkName").focus(); return; }
+      var ex = t.entries.filter(function (e) { return e.n === name; })[0];
+      if (ex && ex.d) { openPath(t, ex.p); $("pkName").value = PICK.name || ""; return; }
+      var path = join(t.path, name);
+      if (!ex) { pickDone([path]); return; }
+      dialog({ title: "Replace \u201C" + name + "\u201D?", sub: "There's already a file with this name here. Saving replaces it.", icon: "alert",
+               buttons: [{ label: "Cancel", value: false }, { label: "Replace", value: true, pri: true, danger: true }] })
+        .then(function (yes) { if (yes) { pickDone([path]); } });
+      return;
+    }
+    if (PICK.mode === "savefiles" || PICK.directory) {
+      var dirs = sel.filter(function (e) { return e.d; });
+      paths = dirs.length && PICK.mode !== "savefiles" ? dirs.map(function (e) { return e.p; }) : dirs.length === 1 ? [dirs[0].p] : [t.path];
+    } else {
+      var files = sel.filter(function (e) { return !e.d; });
+      if (!files.length) { if (sel.length === 1 && sel[0].d) { openPath(t, sel[0].p); } return; }
+      paths = files.map(function (e) { return e.p; });
+    }
+    if (!PICK.multiple) { paths = paths.slice(0, 1); }
+    pickDone(paths);
+  }
+  function pickDone(paths) {
+    api("picked", { paths: paths, filter: pickFilter >= 0 ? pickFilter : null }).catch(fail);
+  }
+  function pickCancel() { api("win", { action: "close" }).catch(function () { }); }
+
+  /* ================================================================================================
      Start
      ================================================================================================ */
   D.documentElement.setAttribute("data-theme", S.theme);
@@ -4402,7 +4556,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   var startPath = "";
   var startSelect = "";
   try { startPath = new URLSearchParams(location.search).get("path") || ""; startSelect = new URLSearchParams(location.search).get("select") || ""; } catch (e) { }
-  var sess = S.session;
+  var sess = PICK ? { panes: [{ active: 0, tabs: [{ path: startPath }] }] } : S.session;
+  if (PICK) { startSelect = PICK.mode === "save" && PICK.name ? PICK.name : ""; startPath = ""; S.dual = false; S.preview = false; S.mill = false; S.side = true; }
   if (sess && sess.panes && sess.panes.length) {
     panes = sess.panes.map(function (sp) { return makePane(sp); });
     activePane = Math.min(sess.active || 0, panes.length - 1);
@@ -4413,6 +4568,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   panes.forEach(function (p, i) { buildPane(i); });
   var nt = null;
   if (startPath) { var sp0 = panes[activePane]; nt = newTabState(startPath); sp0.tabs.push(nt); sp0.active = sp0.tabs.length - 1; }
+  if (PICK) { nt = panes[0].tabs[0]; pickStart(); }
   layout();
   paintSide();
   setTheme(S.theme);
