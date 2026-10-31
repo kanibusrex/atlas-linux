@@ -4,7 +4,7 @@
 
 ![Atlas, with two panes: a folder's files on the left, photo thumbnails and a preview on the right](docs/screenshots/main.png)
 
-Atlas began as a Windows file explorer (PowerShell + WebView2). This is its Linux version: the same page, hosted by Python, GTK 3 and WebKitGTK, and shipped as a small AppImage that uses your system's Python and WebKit.
+Atlas began as a Windows file explorer (PowerShell + WebView2). This is its Linux version: the same page, hosted by Python in a [pywebview](https://pywebview.flowrl.com/) window (GTK 3 and WebKitGTK on Linux), and shipped as a small AppImage that uses your system's Python and WebKit.
 
 ## Features
 
@@ -108,12 +108,13 @@ To try the picker without installing it: `python3 atlas.py --pick '{"mode": "ope
 APPIMAGETOOL=/path/to/appimagetool ./build-appimage.sh   # writes dist/Atlas-x86_64.AppImage
 ```
 
-Or run it straight from the source: `python3 atlas.py [folder]` (`ATLAS_DEBUG=1` prints the page's console).
+The first build fetches pywebview (pinned in `requirements.txt`) into `lib/`. After that you can run Atlas straight from the source: `python3 atlas.py [folder]` (`ATLAS_DEBUG=1` prints the page's console).
 
 | File | What it is |
 |---|---|
-| `atlas.py` | The window: GTK 3 + WebKitGTK, the bridge the page talks to, mounting, thumbnails, D-Bus |
+| `atlas.py` | The window (pywebview), the bridge the page talks to, the copy queue, and the local server for previews, icons and thumbnails |
+| `atlas_linux.py` | What Atlas asks of the Linux desktop: drives and shares through GVFS, the clipboard, icons, Open with, D-Bus, the Omarchy theme |
 | `atlas_core.py` | File operations: listing, search, copy, Trash, archives, permissions, network places |
 | `atlas.html` | The whole interface |
 
-Settings and the browser profile are kept in `~/.local/share/atlas`; thumbnails in `~/.cache/atlas/thumbs`.
+Settings and saved choices (favourites, tabs, theme) are kept in `~/.local/share/atlas`; thumbnails in `~/.cache/atlas/thumbs`.

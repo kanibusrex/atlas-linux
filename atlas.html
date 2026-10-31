@@ -1078,7 +1078,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   /* ---- Saved choices ----------------------------------------------------------------------------- */
   var KEY = "fileDesk.v1";
   var S = { theme: "graphitedk", favs: [], groups: [], recent: [], servers: [], shares: [], hidden: false, dual: false, preview: true, side: true, mill: true, pvPos: "bottom", pvH: 200, session: null };
-  try { var saved = JSON.parse(localStorage.getItem(KEY) || "null"); if (saved) { for (var sk in saved) { S[sk] = saved[sk]; } } } catch (e) { }
+  try { var saved = JSON.parse((W.__atlasStore ? W.__atlasStore.get() : localStorage.getItem(KEY)) || "null"); if (saved) { for (var sk in saved) { S[sk] = saved[sk]; } } } catch (e) { }
   if (!Array.isArray(S.groups)) { S.groups = []; }
   if (W.__atlasLinux && !S.omarchyOnce) { S.theme = "omarchy"; S.omarchyOnce = true; }
   S.side = true;   // the side bar is always there when Atlas opens (Ctrl+B still hides it for a while)
@@ -1090,7 +1090,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       S.session = { dual: S.dual, active: activePane, panes: panes.map(function (p) {
         return { active: p.active, tabs: p.tabs.map(function (t) { return { path: t.path, view: t.view, sort: t.sort }; }) };
       }) };
-      try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { }
+      try { if (W.__atlasStore) { W.__atlasStore.set(JSON.stringify(S)); } else { localStorage.setItem(KEY, JSON.stringify(S)); } } catch (e) { }
     }, 250);
   }
 
@@ -1217,7 +1217,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     return "<span class='fi'>" + fileSvg(k) + "</span>";
   }
   W.__fdIconFail = function (img) { var s = img.parentNode; if (s) { s.innerHTML = fileSvg(s.getAttribute("data-k")); } };
-  var RES = LINUX ? "atlas://app/" : "https://fd.local/";
+  var RES = W.__atlasRes || (LINUX ? "atlas://app/" : "https://fd.local/");
   function fileUrl(p) { return RES + "file?p=" + encodeURIComponent(p); }
   function thumbUrl(p, size) { return RES + "thumb?p=" + encodeURIComponent(p) + "&s=" + size; }
 
