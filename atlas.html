@@ -25,6 +25,9 @@
 [data-theme="aubergine"]  { --bg:#211F27; --surface:#2A2832; --surface-2:#312F3A; --surface-3:#393643; --line:#45414F; --text:#EEECF3; --text-2:#D2CEDD; --muted:#B3AEC1; --accent:#9B87F5; --accent-soft:rgba(155,135,245,.16); --dark:1; }
 :root { --head: color-mix(in srgb, var(--surface) 79%, var(--accent)); --sel: color-mix(in srgb, var(--accent) 22%, transparent); --sel-line: color-mix(in srgb, var(--accent) 55%, transparent); }
 [data-theme="graphite"], [data-theme="harbor"], [data-theme="sage"], [data-theme="claret"] { --head: color-mix(in srgb, var(--surface) 90%, var(--accent)); --sel: color-mix(in srgb, var(--accent) 13%, transparent); --folder: #D99A22; }
+/* folders in the theme's own accent (Omarchy's look sets its own), a little lighter so they stand apart from the text */
+[data-theme="graphitedk"], [data-theme="midnight"], [data-theme="spruce"], [data-theme="aubergine"] { --folder: color-mix(in srgb, var(--accent) 86%, #fff); }
+[data-theme="graphite"], [data-theme="harbor"], [data-theme="sage"], [data-theme="claret"] { --folder: color-mix(in srgb, var(--accent) 78%, #fff); }
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -1202,9 +1205,12 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   var KICON = { image: "pic", pdf: "doc", word: "doc", sheet: "doc", slides: "doc", text: "doc", archive: "copies", audio: "play", video: "play", program: "open", other: "doc" };
   var KCOL = { pdf: "#E5534B", word: "#4C8DF6", sheet: "#3DB07A", slides: "#E8833A", image: "#9B87F5", archive: "#C9A24A", audio: "#E06AA8", video: "#E06AA8" };
   var nativeIcons = !!host;
+  // Windows and macOS draw files in the theme's colours; only programs and apps keep their own icons.
+  // (Linux asks the desktop's icon theme, which follows Omarchy.)
+  var themedIcons = W.__atlasSystem === "windows" || W.__atlasSystem === "mac";
   function folderSvg() { return "<svg viewBox='0 0 24 24'><path d='M2.5 6.5A2 2 0 0 1 4.5 4.5h4.3l2 2h8.7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z' fill='var(--folder)'/><path d='M2.5 9.5h19v8a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z' fill='var(--folder)' style='filter:brightness(1.12)'/></svg>"; }
   function fileSvg(k) {
-    var c = KCOL[k] || "var(--muted)";
+    var c = KCOL[k] || "color-mix(in srgb, var(--accent) 60%, var(--muted))";
     return "<svg viewBox='0 0 24 24'><path d='M14 2.5H6.5a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V8z' fill='var(--surface-3)' stroke='" + c + "' stroke-width='1.4'/><path d='M14 2.5V8h5.5' fill='none' stroke='" + c + "' stroke-width='1.4'/>" +
       (k !== "other" ? "<rect x='7.5' y='12' width='9' height='5' rx='1' fill='" + c + "'/>" : "") + "</svg>";
   }
@@ -1214,6 +1220,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (nativeIcons) {
       // a file with an icon of its own (a program's, an app's) asks for that one; the rest, their kind's
       var x = extOf(e.n), own = W.__atlasSystem === "mac" ? x === ".app" : !LINUX && /^\.(exe|lnk|ico|url|msi)$/.test(x);
+      if (themedIcons && !own) { return "<span class='fi'>" + fileSvg(k) + "</span>"; }
       var src = RES + "icon?" + (own ? "p=" + encodeURIComponent(full) : "e=" + encodeURIComponent(x || ".file")) + (large ? "&s=l" : "");
       return "<span class='fi' data-k='" + k + "'><img alt='' src='" + esc(src) + "' onerror='window.__fdIconFail(this)'></span>";
     }
