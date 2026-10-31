@@ -8,7 +8,7 @@ APP=dist/Atlas.app/Contents/MacOS/Atlas
 
 fail() { echo "$1"; echo "---- atlas.log"; cat "$ATLAS_LOG"; exit 1; }
 
-"$APP" /Applications &
+"$APP" /System/Applications &   # only apps there, so their icons show
 atlas=$!
 sleep 25
 screencapture -x try/1-started.png
