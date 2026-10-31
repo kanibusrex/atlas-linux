@@ -169,7 +169,7 @@ def _expand_percent(p):
 def list_dir(path):
     p = resolve_path(path)
     if not os.path.isabs(p):
-        return {"path": p, "error": "Type a full path, such as ~/Documents or /tmp."}
+        return {"path": p, "error": "Type a full path, such as " + system.PATH_HINT + "."}
     try:
         k = kind(p)
         if k == 1 and is_archive(p):
@@ -231,7 +231,7 @@ def search(root, query, options, state):
                 break
             scanned += 1
             name = de.name
-            if not hidden and name.startswith("."):
+            if not hidden and system.hidden_entry(de):
                 continue
             isdir = is_dir_entry(de)
             # links to other folders are not followed, so a loop cannot trap the search
@@ -343,7 +343,7 @@ def check_name(n):
         return "A name cannot be . or .."
     if len(n.encode("utf-8")) > 255:
         return "That name is too long."
-    return ""
+    return system.bad_name(n)
 
 
 def free_name(d, name):
@@ -1185,13 +1185,15 @@ def run(op, a, state):
     if fn:
         return fn(a, state)
     if op in system.NOT_HERE:
-        raise RuntimeError("This only works on Windows.")
+        raise RuntimeError("This only works on " + system.ELSEWHERE + ".")
     raise RuntimeError("Unknown request: " + op)
 
 
 # ---- The system Atlas is running on (last: its file uses what is above) -------------------------------
 if sys.platform.startswith("linux"):
     import atlas_core_linux as system  # noqa: E402
+elif sys.platform == "win32":
+    import atlas_core_windows as system  # noqa: E402
 else:
     raise ImportError("Atlas has no file work for " + sys.platform + " yet.")
 user_dir = system.user_dir

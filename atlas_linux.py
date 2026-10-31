@@ -608,8 +608,8 @@ class Desktop:
         return False
 
     # ---- File-type icons and thumbnails, for the page (asked for by atlas.py's server, off GTK's thread) --
-    def icon_png(self, ext, large):
-        """The icon theme's icon for a file type, as a PNG"""
+    def icon_png(self, ext, large, own=False):
+        """The icon theme's icon for a file type, as a PNG (own, a file's own icon, is Windows')"""
         return self.call_main_wait(self._icon_png, ext, large)
 
     def _icon_png(self, ext, large):

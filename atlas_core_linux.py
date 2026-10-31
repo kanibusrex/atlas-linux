@@ -521,8 +521,21 @@ def set_wallpaper(path):
 
 
 # ---- What atlas_core.py asks of every system --------------------------------------------------------
+PATH_HINT = "~/Documents or /tmp"
+ELSEWHERE = "Windows"   # where the requests in NOT_HERE work
+
+
 def is_hidden(name, _st):
     return name.startswith(".")
+
+
+def hidden_entry(de):
+    return de.name.startswith(".")
+
+
+def bad_name(_n):
+    """Anything besides / is allowed in a name here (atlas_core checks that, and the length)."""
+    return ""
 
 
 def owner(uid):

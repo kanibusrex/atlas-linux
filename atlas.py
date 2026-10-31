@@ -27,9 +27,10 @@ import secrets
 import sys
 import threading
 import time
+import traceback
 import urllib.parse
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.abspath(__file__))   # beside it, or in the built app
 sys.path.insert(0, HERE)
 # pywebview, and what it needs, come with Atlas (build-appimage.sh puts them in lib)
 if os.path.isdir(os.path.join(HERE, "lib")):
@@ -38,8 +39,10 @@ import atlas_core as core  # noqa: E402
 
 if sys.platform.startswith("linux"):
     import atlas_linux as desktop  # noqa: E402
+elif sys.platform == "win32":
+    import atlas_windows as desktop  # noqa: E402
 else:
-    sys.exit("Atlas runs on Linux for now.")
+    sys.exit("Atlas runs on Linux and Windows for now.")
 
 import webview  # noqa: E402
 
@@ -115,6 +118,8 @@ class Job:
         try:
             self.result = core.run(self.op, self.args, self.state)
         except Exception as e:  # anything a request hits is told to the page, never lost
+            if os.environ.get("ATLAS_DEBUG"):
+                traceback.print_exc()
             self.error = getattr(e, "strerror", None) or str(e) or e.__class__.__name__
         self.done = True
 
@@ -284,6 +289,8 @@ class Host:
         try:
             self.receive(rid, str(m.get("op") or ""), m)
         except Exception as e:
+            if os.environ.get("ATLAS_DEBUG"):
+                traceback.print_exc()
             self.reply(rid, error=str(e) or e.__class__.__name__)
 
     def receive(self, rid, op, m):
@@ -557,7 +564,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if what == "atlas.html":
                 return self.send_data(self.page(host), "text/html; charset=utf-8")
             if what == "icon":
-                png = host.desktop.icon_png((q.get("e") or q.get("p") or [""])[0], (q.get("s") or [""])[0] == "l")
+                # ?p= a file's own icon (a program's, on Windows), ?e= the one for its kind
+                own = bool(q.get("p"))
+                png = host.desktop.icon_png((q.get("p") if own else q.get("e") or [""])[0], (q.get("s") or [""])[0] == "l", own)
                 return self.send_data(png, "image/png", cache=True) if png else self.send_error(404)
             if what == "thumb":
                 size = max(64, min(1600, int((q.get("s") or ["256"])[0] or 256)))
@@ -633,6 +642,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def main():
+    # ATLAS_LOG=file: errors (and with ATLAS_DEBUG, what went wrong where) go there, for the Windows app,
+    # which has no console. Not stdout: a picker gives its answer there.
+    if os.environ.get("ATLAS_LOG"):
+        sys.stderr = open(os.environ["ATLAS_LOG"], "a", encoding="utf-8", buffering=1)
     pick = None
     args = sys.argv[1:]
     if len(args) > 1 and args[0] == "--pick":

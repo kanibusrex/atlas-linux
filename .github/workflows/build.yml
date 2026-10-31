@@ -1,0 +1,61 @@
+# Builds Atlas for Windows (an installer) on every push, checks the file work there, starts the app and
+# takes pictures of it. A v* tag also attaches the installer to that tag's release.
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pywebview and PyInstaller
+        run: python -m pip install -r requirements.txt pyinstaller==6.11.1
+
+      - name: Check the file work
+        run: python tests/smoke_core.py
+
+      - name: Build Atlas.exe
+        run: >
+          pyinstaller --noconfirm --windowed --name Atlas --icon atlas.ico
+          --add-data "atlas.html;." --add-data "AtlasCore.ps1;." --add-data "atlas.png;."
+          --exclude-module atlas_linux --exclude-module atlas_core_linux --exclude-module gi
+          atlas.py
+
+      - name: Start it and take pictures
+        shell: pwsh
+        run: ./tests/try-windows.ps1
+
+      - name: Make the installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y | Out-Null
+          $v = python -c "import re; print(re.search(r'VERSION = \"([^\"]+)\"', open('atlas.py').read()).group(1))"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVersion=$v" windows\atlas.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: atlas-windows
+          path: |
+            dist/Atlas-*-setup.exe
+            try/
+
+      # never replaces a file a release already has: a new version gets a new tag
+      - name: Attach the installer to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" (Get-Item dist\Atlas-*-setup.exe).FullName
