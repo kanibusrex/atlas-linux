@@ -58,7 +58,7 @@ else:
 
 import webview  # noqa: E402
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 DATA_DIR = desktop.DATA_DIR
 PAGE = os.path.join(HERE, "atlas.html")
 BG = "#1a1b1e"

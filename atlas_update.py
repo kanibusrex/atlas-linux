@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 
 REPO = "kanibusrex/atlas-linux"
@@ -31,11 +32,33 @@ def version_tuple(v):
 
 def latest(current):
     """The newest release: its version, notes, page, and the download for each system."""
-    req = urllib.request.Request(LATEST, headers={"Accept": "application/vnd.github+json", "User-Agent": "Atlas/" + current})
-    with urllib.request.urlopen(req, timeout=15) as r:
-        rel = json.load(r)
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "Atlas/" + current}
+    if os.environ.get("GITHUB_TOKEN"):   # in CI, whose machines share the API's hourly allowance
+        headers["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
+    try:
+        with urllib.request.urlopen(urllib.request.Request(LATEST, headers=headers), timeout=15) as r:
+            rel = json.load(r)
+    except urllib.error.HTTPError as e:
+        if e.code not in (403, 429):
+            raise
+        return _latest_by_page(current)   # the API's allowance for this network is used up for the hour
     return {"version": str(rel.get("tag_name") or "").lstrip("v"), "notes": str(rel.get("body") or ""), "url": rel.get("html_url") or "",
             "assets": {a["name"]: {"url": a["browser_download_url"], "size": a.get("size") or 0} for a in rel.get("assets") or []}}
+
+
+def _latest_by_page(current):
+    """The newest release without the API: its page's address names the version, and each download's name
+    follows from it. No notes this way."""
+    page = "https://github.com/" + REPO + "/releases/latest"
+    with urllib.request.urlopen(urllib.request.Request(page, method="HEAD", headers={"User-Agent": "Atlas/" + current}), timeout=15) as r:
+        url = r.geturl()   # .../releases/tag/v1.2.1, once the redirect is followed
+    tag = url.rstrip("/").rsplit("/", 1)[-1]
+    v = tag.lstrip("v")
+    if not re.match(r"^\d+\.\d+", v):
+        raise RuntimeError("GitHub didn't say which version is the newest.")
+    names = ["Atlas-x86_64.AppImage", "Atlas-%s-windows-x64-setup.exe" % v, "Atlas-%s-mac-arm64.dmg" % v]
+    base = "https://github.com/" + REPO + "/releases/download/" + tag + "/"
+    return {"version": v, "notes": "", "url": url, "assets": {n: {"url": base + n, "size": 0} for n in names}}
 
 
 def asset_for(system, rel):

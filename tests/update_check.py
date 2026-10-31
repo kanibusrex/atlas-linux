@@ -21,7 +21,11 @@ system = {"linux": "linux", "win32": "windows", "darwin": "mac"}[sys.platform]
 started = []
 update._after = lambda pid, cmd, cleanup=None: started.append(cmd)   # nothing is started here
 
+# the way Atlas falls back when GitHub's API has had enough from this network for the hour
+by_page = update._latest_by_page("0.0.0")
+print("newest release, from its page:", by_page["version"])
 rel = update.latest("0.0.0")
+assert rel["version"] == by_page["version"] and update.asset_for(system, by_page)["url"] == update.asset_for(system, rel)["url"]
 print("newest release:", rel["version"], "with", ", ".join(sorted(rel["assets"])))
 assert update.version_tuple(rel["version"]) > update.version_tuple("1.1.0"), "1.1.0 should see it as newer"
 a = update.asset_for(system, rel)
@@ -30,7 +34,7 @@ seen = []
 work = tempfile.mkdtemp(prefix="atlas-update-test-")
 f = update.download(a, work, lambda done, total: seen.append((done, total)))
 print("downloaded %s (%d bytes, %d progress reports)" % (a["name"], os.path.getsize(f), len(seen)))
-assert os.path.getsize(f) == a["size"] and seen and seen[-1][0] == seen[-1][1]
+assert (not a["size"] or os.path.getsize(f) == a["size"]) and seen and seen[-1][0] == seen[-1][1]
 
 if system == "linux":
     where = os.path.join(work, "installed", "Atlas-x86_64.AppImage")
@@ -38,7 +42,7 @@ if system == "linux":
     with open(where, "w") as old:
         old.write("the old one")
     update.install(system, f, where)
-    assert os.path.getsize(where) == a["size"] and os.access(where, os.X_OK)
+    assert os.path.getsize(where) == os.path.getsize(f) and os.access(where, os.X_OK)
     assert started == [[where]]
 elif system == "mac":
     where = os.path.join(work, "Applications", "Atlas.app")
