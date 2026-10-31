@@ -106,7 +106,18 @@ To try the picker without installing it: `python3 atlas.py --pick '{"mode": "ope
 
 The same Atlas also builds for Windows 10 and 11: every push builds an installer on GitHub Actions (`.github/workflows/build.yml`), under the run's **atlas-windows** artifact, and a `v*` tag attaches it to that release. It installs for you alone, with no administrator rights. Windows' own requests (who has access to a folder, a group's members, mapping drives, a server's shares, what's using a file) are answered by `AtlasCore.ps1`, the original Windows Atlas's file work. It needs the WebView2 runtime, which Windows 11 has, and Windows 10 gets with Microsoft Edge.
 
-For macOS (Apple silicon), the same workflow builds `Atlas.app` in a disk image, under the **atlas-mac** artifact. It isn't signed by Apple, so the first time, right-click Atlas and choose Open (or run `xattr -cr /Applications/Atlas.app`). The Trash isn't shown as a folder there (Finder keeps where things came from to itself), but deleting goes to it, and Undo brings things back.
+For macOS (Apple silicon), the same workflow builds `Atlas.app` in a disk image (`Atlas-<version>-mac-arm64.dmg` on each release, or the **atlas-mac** artifact of a run). To install it:
+
+1. Open the disk image and drag **Atlas** onto **Applications**.
+2. Atlas isn't signed by Apple, so macOS blocks it until you clear the quarantine flag it put on the download. In Terminal:
+
+   ```sh
+   xattr -cr /Applications/Atlas.app
+   ```
+
+   (Or right-click Atlas, choose **Open**, then **Open** again; or **System Settings → Privacy & Security → Open Anyway**.) Do this again after installing a new version.
+
+The Trash isn't shown as a folder there (Finder keeps where things came from to itself), but deleting goes to it, and Undo brings things back.
 
 ## Build
 
