@@ -223,7 +223,8 @@ class Portal:
             paths = ans["paths"]
             if method == "SaveFiles":   # a folder was chosen; the files go in it, under their own names
                 paths = [os.path.join(paths[0], n) for n in pick.get("files") or []]
-            res = {"uris": GLib.Variant("as", [Gio.File.new_for_path(p).get_uri() for p in paths])}
+            # always file:// URIs, which is all the portal takes: Gio would give smb://... for a file on a network share
+            res = {"uris": GLib.Variant("as", [GLib.filename_to_uri(os.path.abspath(p), None) for p in paths])}
             fi = ans.get("filter")
             if isinstance(fi, int) and 0 <= fi < len(filters):
                 res["current_filter"] = GLib.Variant("(sa(us))", filters[fi])

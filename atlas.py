@@ -33,7 +33,7 @@ sys.path.insert(0, HERE)
 import atlas_core as core  # noqa: E402
 
 APP_ID = "dev.atlas.Atlas"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 DATA_DIR = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "atlas")
 PAGE = os.path.join(HERE, "atlas.html")
 BG = "#1a1b1e"
