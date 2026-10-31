@@ -266,8 +266,11 @@ def powershell(call, a):
               "try { $r = " + call + "; ConvertTo-FDJson $r } catch { ConvertTo-FDJson @{ __error = $_.Exception.Message } }\n")
     cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
            "-EncodedCommand", base64.b64encode(script.encode("utf-16-le")).decode()]
+    # Windows PowerShell finds its own modules: PowerShell 7's (when Atlas was started from it) won't load in it
+    env = {k: v for k, v in os.environ.items() if k.upper() != "PSMODULEPATH"}
     try:
-        r = subprocess.run(cmd, capture_output=True, timeout=180, stdin=subprocess.DEVNULL, creationflags=0x08000000)   # no console window
+        r = subprocess.run(cmd, capture_output=True, timeout=180, stdin=subprocess.DEVNULL, env=env,
+                           creationflags=0x08000000)   # no console window
     except subprocess.TimeoutExpired:
         raise RuntimeError("Windows took too long to answer.")
     lines = [ln for ln in r.stdout.decode("utf-8", "replace").splitlines() if ln.strip()]

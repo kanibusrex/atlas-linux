@@ -41,7 +41,7 @@ try:
     os.makedirs(os.path.join(a, "sub", "deep"))
     os.makedirs(b)
     for rel, text in (("one.txt", "hello"), ("sub/two.md", "# hi\n"), ("sub/deep/three.txt", "x" * 1000)):
-        with open(os.path.join(a, *rel.split("/")), "w") as f:
+        with open(os.path.join(a, *rel.split("/")), "w", newline="") as f:   # the same bytes on Windows
             f.write(text)
 
     r = run("list", path=a)
