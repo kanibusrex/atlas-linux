@@ -42,7 +42,7 @@ jobs:
       - name: Build Atlas.exe
         run: >
           pyinstaller --noconfirm --windowed --name Atlas --icon atlas.ico
-          --add-data "atlas.html;." --add-data "AtlasCore.ps1;." --add-data "atlas.png;."
+          --add-data "atlas.html;." --add-data "AtlasCore.ps1;." --add-data "atlas.ico;."
           --exclude-module atlas_linux --exclude-module atlas_core_linux --exclude-module gi
           atlas.py
 

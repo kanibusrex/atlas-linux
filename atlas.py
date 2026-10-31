@@ -254,7 +254,8 @@ class Host:
         self.desktop.every(50, self.tick)
         debug = bool(os.environ.get("ATLAS_DEBUG"))
         webview.settings["OPEN_DEVTOOLS_IN_DEBUG"] = False
-        ico = os.path.join(HERE, "atlas.png")
+        # Windows takes only an .ico for a window's icon (a PNG there is an error that ends Atlas)
+        ico = os.path.join(HERE, "atlas.ico" if sys.platform == "win32" else "atlas.png")
         webview.start(debug=debug, private_mode=True, icon=ico if os.path.exists(ico) else None)
 
     # ---- Talking to the page ----------------------------------------------------------------------
