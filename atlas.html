@@ -1065,6 +1065,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       return;
     }
     if (d.ev === "drives") { loadDrives(); return; }
+    if (d.ev === "update") { offerUpdate(d.info); return; }
     if (d.ev === "mountq") { mountQuestion(d); return; }
     if (d.ev === "omarchy") { omarchyPal = d.palette || null; if (omarchyPal) { applyFont(omarchyPal.font); } applyOmarchy(); return; }
     if (d.ev === "win") { D.body.classList.toggle("maxed", !!d.max); paintWinMax(); return; }
@@ -3644,9 +3645,45 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       { label: "Connect to a server\u2026", icon: "net", win: false, run: function () { connectShare(); } },
       { label: "Open in Windows Explorer", icon: "folder", disabled: !t.path, run: function () { api("explorer", { path: t.path }).catch(fail); } },
       { label: "Open a terminal here", icon: "term", disabled: !can, run: function () { api("terminal", { path: t.path }).catch(fail); } },
-      { label: "Copy this folder's path", icon: "link", disabled: !t.path, run: function () { api("copytext", { text: t.path }).then(function () { toast("Copied the path."); }); } }
+      { label: "Copy this folder's path", icon: "link", disabled: !t.path, run: function () { api("copytext", { text: t.path }).then(function () { toast("Copied the path."); }); } },
+      "-",
+      { label: "Check for updates\u2026", icon: "info", linux: true, run: checkForUpdate }
     ]);
   }
+  /* ---- New versions (from GitHub; see atlas_update.py) ------------------------------------------------- */
+  function checkForUpdate() {
+    toast("Looking for a new version\u2026");
+    api("update", { action: "check" }).then(function (u) {
+      if (u.newer) { offerUpdate(u); } else { toast("Atlas " + u.current + " is the newest version.", { good: true }); }
+    }).catch(fail);
+  }
+  // the release notes' Markdown, as plain text: no **, ###, `code` or [link](url) marks
+  function plainNotes(s) {
+    return s.replace(/\r/g, "").replace(/```\w*\n?/g, "").replace(/^#+\s*/gm, "").replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/`([^`]+)`/g, "$1").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/^- /gm, "• ").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  function offerUpdate(u) {
+    var body = (u.notes ? "<div style='max-height:260px;overflow:auto;white-space:pre-wrap;font-size:12px;opacity:.85;margin-bottom:12px'>" + esc(plainNotes(u.notes)) + "</div>" : "") +
+      "<label class='chk'><input type='checkbox' id='upAuto'" + (u.auto ? " checked" : "") + "> Look for new versions when Atlas opens (once a day)</label>";
+    dialog({ title: "Atlas " + u.version + " is out", sub: "You have " + u.current + "." + (u.canInstall ? " Atlas closes, updates, and opens again." : ""), icon: "info", wide: true, body: body,
+      mount: function (s) { s.querySelector("#upAuto").onchange = function (ev) { api("update", { action: "auto", on: ev.target.checked }).catch(fail); }; },
+      buttons: [{ label: "Skip this version", value: "skip" }, { label: "Later", value: null },
+        { label: u.canInstall ? "Update now" : "Get it from GitHub", value: u.canInstall ? "install" : "page", pri: true }] }).then(function (v) {
+      if (v === "skip") { api("update", { action: "skip", version: u.version }).then(function () { toast("Atlas won't offer " + u.version + " again."); }).catch(fail); }
+      else if (v === "page") { api("url", { url: u.url }).catch(fail); }
+      else if (v === "install") { installUpdate(u); }
+    });
+  }
+  function installUpdate(u) {
+    var shown = 0;
+    toast("Downloading Atlas " + u.version + "\u2026", { ms: 4000 });
+    api("update", { action: "install" }, function (ev) {
+      // a word every quarter of the way, so the toasts don't pile up
+      var pct = ev.total ? Math.floor(ev.done * 100 / ev.total) : 0;
+      if (pct >= shown + 25 && pct < 100) { shown = pct - pct % 25; toast("Downloading Atlas " + u.version + ": " + shown + "%", { ms: 2500 }); }
+    }).then(function () { toast("Updated. Atlas is opening again\u2026", { good: true, ms: 10000 }); }).catch(fail);
+  }
+
   function toggleHidden() { S.hidden = !S.hidden; panes.forEach(function (p) { if (p) { p.tabs.forEach(function (t) { t.viewCache = null; }); } }); repaintAll(); toast(S.hidden ? "Showing hidden items." : "Hiding hidden items."); save(); }
   function selectAll(i) { var t = tabOf(panes[i]); viewOf(t).forEach(function (e) { t.sel.add(e.p); }); paintList(i); paintStatus(i); paintPreview(); }
   function repaintAll() { panes.forEach(function (p, i) { if (p && p.el && p.el.isConnected) { paintPane(i); } }); paintSide(); pvShown = ""; paintPreview(); }

@@ -12,7 +12,7 @@ if [ ! -d "$SRC/lib/webview" ]; then
 fi
 APPDIR="$SRC/build/Atlas.AppDir"
 rm -rf "$APPDIR"; mkdir -p "$APPDIR/usr/share/atlas"
-cp "$SRC/atlas.py" "$SRC/atlas_core.py" "$SRC/atlas_core_linux.py" "$SRC/atlas_linux.py" "$SRC/atlas_portal.py" "$SRC/atlas.html" "$SRC/atlas.png" "$APPDIR/usr/share/atlas/"
+cp "$SRC/atlas.py" "$SRC/atlas_core.py" "$SRC/atlas_core_linux.py" "$SRC/atlas_linux.py" "$SRC/atlas_update.py" "$SRC/atlas_portal.py" "$SRC/atlas.html" "$SRC/atlas.png" "$APPDIR/usr/share/atlas/"
 cp -r "$SRC/lib" "$APPDIR/usr/share/atlas/lib"
 find "$APPDIR/usr/share/atlas/lib" -name __pycache__ -prune -exec rm -rf {} +
 cp "$SRC/AppRun" "$SRC/atlas.desktop" "$SRC/atlas.png" "$APPDIR/"

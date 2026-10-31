@@ -25,6 +25,9 @@ jobs:
       - name: Check the file work
         run: python tests/smoke_core.py
 
+      - name: Try an update from the newest release
+        run: python tests/update_check.py
+
       # from the source, with a console: if the built app fails, this says whether it's the app or the build
       - name: Start it from the source
         shell: pwsh
@@ -89,6 +92,9 @@ jobs:
 
       - name: Check the file work
         run: python tests/smoke_core.py
+
+      - name: Try an update from the newest release
+        run: python tests/update_check.py
 
       - name: Build Atlas.app
         run: >

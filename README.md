@@ -119,6 +119,12 @@ For macOS (Apple silicon), the same workflow builds `Atlas.app` in a disk image 
 
 The Trash isn't shown as a folder there (Finder keeps where things came from to itself), but deleting goes to it, and Undo brings things back.
 
+## Updates
+
+Once a day, when it opens, Atlas asks GitHub for the newest release (`api.github.com`, nothing about you is sent). If there's a newer version it says so, with **Update now**, **Later** and **Skip this version**; **Check for updates…** in the **⋯** menu looks right away. Turn the daily look off with the tick box in that window.
+
+**Update now** downloads the new version and puts it in place, then Atlas closes and opens again: the AppImage is replaced (Linux), the installer runs silently (Windows), or the new Atlas.app is swapped in (macOS; no `xattr` needed for an update). Run from the source, Atlas only points you to the release.
+
 ## Build
 
 ```sh
@@ -136,7 +142,9 @@ The first build fetches pywebview (pinned in `requirements.txt`) into `lib/`. Af
 | `atlas_core_mac.py`, `atlas_mac.py` | The same for macOS: /Volumes, the Trash, the pasteboard, Finder's icons, Quick Look thumbnails |
 | `atlas_worker.py` | The thread the Windows and macOS desktops work through (GTK's own thread does it on Linux) |
 | `atlas_core_windows.py`, `atlas_windows.py` | The same for Windows: drive letters, the Recycle Bin, the clipboard, icons; `AtlasCore.ps1` for the service-desk requests |
+| `atlas_update.py` | Looking for a new version on GitHub, and putting it in place |
 | `tests/smoke_core.py` | A quick check of the file work on the system it runs on |
+| `tests/update_check.py` | Tries an update from the newest release, somewhere it can't hurt |
 | `atlas.html` | The whole interface |
 
 Settings and saved choices (favourites, tabs, theme) are kept in `~/.local/share/atlas`; thumbnails in `~/.cache/atlas/thumbs`.

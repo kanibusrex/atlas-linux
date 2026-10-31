@@ -25,6 +25,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; an Atlas still closing when an update runs is waited for, not left holding its files
+CloseApplications=force
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
@@ -38,3 +40,5 @@ Name: "{autodesktop}\Atlas"; Filename: "{app}\Atlas.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Atlas.exe"; Description: "{cm:LaunchProgram,Atlas}"; Flags: nowait postinstall skipifsilent
+; an update Atlas started (silently, see atlas_update.py) opens Atlas again when it's in
+Filename: "{app}\Atlas.exe"; Flags: nowait; Check: WizardSilent

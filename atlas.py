@@ -24,6 +24,7 @@ import os
 import queue
 import re
 import secrets
+import shutil
 import sys
 import threading
 import time
@@ -44,6 +45,7 @@ sys.path.insert(0, HERE)
 if os.path.isdir(os.path.join(HERE, "lib")):
     sys.path.insert(1, os.path.join(HERE, "lib"))
 import atlas_core as core  # noqa: E402
+import atlas_update as update  # noqa: E402
 
 if sys.platform.startswith("linux"):
     import atlas_linux as desktop  # noqa: E402
@@ -204,13 +206,17 @@ class Host:
         self.outbox = queue.Queue()
         os.makedirs(DATA_DIR, exist_ok=True)
         self.prefs_path = os.path.join(DATA_DIR, "atlas.json")
-        self.prefs = {"W": 1360, "H": 860, "Max": False, "Dark": True, "Zoom": 1.15}
+        # UpdateCheck: look for a new version on GitHub (at most daily); UpdateLast, when it last did; UpdateSkip, one not wanted
+        self.prefs = {"W": 1360, "H": 860, "Max": False, "Dark": True, "Zoom": 1.15, "UpdateCheck": True, "UpdateLast": 0, "UpdateSkip": ""}
         try:
             with open(self.prefs_path) as f:
                 self.prefs.update(json.load(f))
         except (OSError, ValueError):
             pass
         self.saved = self.load_page_state()
+        # what the last update downloaded is done with once the new Atlas is running
+        if not pick:
+            shutil.rmtree(os.path.join(desktop.CACHE_DIR, "update"), ignore_errors=True)
         self.token = secrets.token_urlsafe(24)
         self.server = Resources(self)
         self.base = "http://127.0.0.1:%d/%s/" % (self.server.server_address[1], self.token)
@@ -394,6 +400,8 @@ class Host:
             for msg in self.pending_open:
                 self.send(msg)
             self.pending_open = []
+            if not self.pick and self.prefs.get("UpdateCheck", True) and time.time() - float(self.prefs.get("UpdateLast") or 0) > 86400:
+                threading.Thread(target=self.update_check, args=(0,), daemon=True).start()
             return self.send_copies(True)
         if op == "win":
             act = str(m.get("action") or "")
@@ -405,9 +413,74 @@ class Host:
                 self.reply(rid, True)
                 return self.window.destroy()
             return self.reply(rid, True)
+        if op == "update":
+            return self.update_request(rid, m)
         if self.desktop.handle(rid, op, m):
             return
         self.reply(rid, error="Unknown request: " + op)
+
+    # ---- New versions, from GitHub (atlas_update.py) -------------------------------------------------------
+    def current_version(self):
+        return os.environ.get("ATLAS_PRETEND_VERSION") or VERSION   # an older version, to try updating
+
+    def update_info(self):
+        rel = update.latest(self.current_version())
+        self.release = rel
+        return {"current": self.current_version(), "version": rel["version"], "url": rel["url"], "notes": rel["notes"][:4000],
+                "newer": update.version_tuple(rel["version"]) > update.version_tuple(self.current_version()),
+                "canInstall": bool(update.asset_for(desktop.SYSTEM, rel) and update.target(desktop.SYSTEM)),
+                "auto": bool(self.prefs.get("UpdateCheck", True))}
+
+    def update_check(self, rid):
+        """Asked for (rid), or the daily look when Atlas starts (0): a new version is offered once, unless skipped."""
+        try:
+            info = self.update_info()
+        except Exception as e:
+            if rid:
+                self.reply(rid, error="Couldn't reach GitHub to look for a new version (" + (getattr(e, "reason", None) and str(e.reason) or str(e)) + ").")
+            return
+        self.prefs["UpdateLast"] = time.time()
+        if rid:
+            return self.reply(rid, info)
+        if info["newer"] and info["version"] != self.prefs.get("UpdateSkip"):
+            self.event({"ev": "update", "info": info})
+
+    def update_request(self, rid, m):
+        act = str(m.get("action") or "")
+        if act == "check":
+            threading.Thread(target=self.update_check, args=(rid,), daemon=True).start()
+        elif act == "install":
+            threading.Thread(target=self.update_install, args=(rid,), daemon=True).start()
+        elif act == "skip":
+            self.prefs["UpdateSkip"] = str(m.get("version") or "")
+            self.reply(rid, True)
+        elif act == "auto":
+            self.prefs["UpdateCheck"] = bool(m.get("on"))
+            self.reply(rid, True)
+        else:
+            self.reply(rid, error="Unknown update request: " + act)
+
+    def update_install(self, rid):
+        try:
+            rel = getattr(self, "release", None) or update.latest(self.current_version())
+            a, where = update.asset_for(desktop.SYSTEM, rel), update.target(desktop.SYSTEM)
+            if not a or not where:
+                return self.reply(rid, error="This Atlas can't update itself. Get the new one from " + rel["url"])
+            last = [0.0]
+
+            def progress(done, total):
+                if time.monotonic() - last[0] > 0.2 or done == total:
+                    last[0] = time.monotonic()
+                    self.send('{"ev":"job","id":%d,"data":%s}' % (rid, to_json({"kind": "update", "done": done, "total": total})))
+            f = update.download(a, os.path.join(desktop.CACHE_DIR, "update"), progress)
+            update.install(desktop.SYSTEM, f, where)
+        except Exception as e:
+            if os.environ.get("ATLAS_DEBUG"):
+                traceback.print_exc()
+            return self.reply(rid, error="The update didn't go in: " + (str(e) or e.__class__.__name__))
+        self.reply(rid, {"restarting": True})
+        # the new Atlas starts once this one has closed
+        self.desktop.call_main(self.window.destroy)
 
     # ---- The copy queue: one copy or move at a time, in order -----------------------------------------
     def start_next_copy(self):
