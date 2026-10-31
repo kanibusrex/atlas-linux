@@ -1080,7 +1080,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   var S = { theme: "graphitedk", favs: [], groups: [], recent: [], servers: [], shares: [], hidden: false, dual: false, preview: true, side: true, mill: true, pvPos: "bottom", pvH: 200, session: null };
   try { var saved = JSON.parse((W.__atlasStore ? W.__atlasStore.get() : localStorage.getItem(KEY)) || "null"); if (saved) { for (var sk in saved) { S[sk] = saved[sk]; } } } catch (e) { }
   if (!Array.isArray(S.groups)) { S.groups = []; }
-  if (W.__atlasLinux && !S.omarchyOnce) { S.theme = "omarchy"; S.omarchyOnce = true; }
+  if (W.__atlasLinux && (W.__atlasSystem || "linux") === "linux" && !S.omarchyOnce) { S.theme = "omarchy"; S.omarchyOnce = true; }
   S.side = true;   // the side bar is always there when Atlas opens (Ctrl+B still hides it for a while)
   var saveT = 0;
   function save() {
@@ -1097,6 +1097,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   /* ---- Paths (Windows, or Linux in its window there) ---------------------------------------------- */
   // "" is This PC; \\server is a server's shares. On Linux, / is the top and drives are mount points.
   var LINUX = !!W.__atlasLinux;
+  var OMARCHY = LINUX && (W.__atlasSystem || "linux") === "linux";   // Linux mode is macOS's too, which has no Omarchy theme
   var SEP = LINUX ? "/" : "\\";
   if (LINUX) { D.documentElement.classList.add("linux"); }
   function join(dir, name) { return /[\\\/]$/.test(dir) ? dir + name : dir + SEP + name; }
@@ -4052,7 +4053,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       { t: "Open the Trash", ic: "trash", run: function () { if (trashBin.path) { openPath(cur(), trashBin.path); } } },
       { t: "Empty the Trash", ic: "trash", run: emptyTrash }
     ].map(function (c) { c.kind = "Action"; return c; });
-    if (LINUX) { list.push({ t: "Theme: Omarchy (follow the system)", ic: "palette", kind: "Theme", run: function () { setTheme("omarchy"); } }); }
+    if (OMARCHY) { list.push({ t: "Theme: Omarchy (follow the system)", ic: "palette", kind: "Theme", run: function () { setTheme("omarchy"); } }); }
     THEMES.forEach(function (th) { list.push({ t: "Theme: " + th.label, ic: "palette", kind: "Theme", run: function () { setTheme(th.id); } }); });
     var go = function (path, label, kind, ic) { list.push({ t: label, s: path, ic: ic, kind: kind, run: function () { openPath(cur(), path); } }); };
     S.favs.forEach(function (f) { go(f, baseName(f), "Favourite", "starf"); });
@@ -4277,7 +4278,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   }
   function omarchyName() { return omarchyPal && omarchyPal.name ? omarchyPal.name.replace(/(^|-)([a-z])/g, function (m, d, c) { return (d ? " " : "") + c.toUpperCase(); }) : ""; }
   function setTheme(id) {
-    if (id === "omarchy" && LINUX) {
+    if (id === "omarchy" && OMARCHY) {
       S.theme = "omarchy"; save();
       if (omarchyPal) { applyOmarchy(); return; }
       api("omarchy").then(function (pal) {
@@ -4295,7 +4296,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   }
   function themeMenu(btn) {
     var r = btn.getBoundingClientRect();
-    var sys = !LINUX ? [] : [{ head: "System" }, { label: "Omarchy" + (omarchyName() ? " (" + omarchyName() + ")" : "") + (S.theme === "omarchy" ? "  \u2713" : ""),
+    var sys = !OMARCHY ? [] : [{ head: "System" }, { label: "Omarchy" + (omarchyName() ? " (" + omarchyName() + ")" : "") + (S.theme === "omarchy" ? "  \u2713" : ""),
       sw: omarchyPal ? omarchyLook(omarchyPal).accent : "#888888", run: function () { setTheme("omarchy"); } }];
     menu(r.right + 8, r.bottom - (LINUX ? 400 : 330), sys.concat([{ head: "Dark" }]).concat(THEMES.filter(function (t) { return t.dark; }).map(function (t) { return { label: t.label + (S.theme === t.id ? "  \u2713" : ""), sw: t.sw, run: function () { setTheme(t.id); } }; }))
       .concat([{ head: "Light" }]).concat(THEMES.filter(function (t) { return !t.dark; }).map(function (t) { return { label: t.label + (S.theme === t.id ? "  \u2713" : ""), sw: t.sw, run: function () { setTheme(t.id); } }; })));
@@ -4574,7 +4575,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   setTheme(S.theme);
   api("hello").then(function (r) { if (r && r.frameless) { startFrameless(!!r.max); } if (r && r.zoom) { zoomLvl = r.zoom; } if (r && r.isDefault) { atlasDefault = true; D.documentElement.classList.add("atlas-default"); } }).catch(function () { });
   // Omarchy's font, whichever theme Atlas is in (and its colours, when it follows Omarchy's theme)
-  if (LINUX) { api("omarchy").then(function (pal) { if (pal) { omarchyPal = pal; applyFont(pal.font); applyOmarchy(); } }).catch(function () { }); }
+  if (OMARCHY) { api("omarchy").then(function (pal) { if (pal) { omarchyPal = pal; applyFont(pal.font); applyOmarchy(); } }).catch(function () { }); }
   loadDrives().then(function () { if (LINUX) { reconnectShares(); } });
   panes.forEach(function (p) { p.tabs.forEach(function (t) { openPath(t, t.path, { replace: true, select: t === nt && startSelect ? [startSelect] : undefined }); }); });
   focusList(activePane);

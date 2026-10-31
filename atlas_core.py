@@ -1194,6 +1194,8 @@ if sys.platform.startswith("linux"):
     import atlas_core_linux as system  # noqa: E402
 elif sys.platform == "win32":
     import atlas_core_windows as system  # noqa: E402
+elif sys.platform == "darwin":
+    import atlas_core_mac as system  # noqa: E402
 else:
     raise ImportError("Atlas has no file work for " + sys.platform + " yet.")
 user_dir = system.user_dir

@@ -2,27 +2,26 @@
 Atlas on Windows: what atlas.py asks of the desktop here. pywebview's window is WinForms with WebView2,
 reached through pythonnet, so the clipboard, the Save dialog and the icons are the same .NET calls
 AtlasShell.ps1 made. Requests from the page are worked through one at a time on a thread of Atlas's
-own (call_main); anything that must touch the window or the clipboard is handed to the window's
+own (call_main, from atlas_worker.py); anything that must touch the window or the clipboard is handed to the window's
 thread (ui).
 
-The same few names (Desktop, DATA_DIR, CACHE_DIR, LINUX) are what atlas_linux.py gives on Linux.
+The same few names (Desktop, DATA_DIR, CACHE_DIR, SYSTEM) are what atlas_linux.py gives on Linux.
 """
 
 import ctypes
 import os
-import queue
 import re
 import secrets
 import shutil
 import subprocess
 import threading
-import time
 from ctypes import wintypes
 from multiprocessing.connection import Client, Listener
 
 import atlas_core as core
+from atlas_worker import Worker
 
-LINUX = False
+SYSTEM = "windows"
 DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local"), "Atlas")
 CACHE_DIR = os.path.join(DATA_DIR, "cache")
 # a second Atlas hands its folder to the one already open, through this pipe (one per person)
@@ -79,59 +78,14 @@ def start_path(arg, cwd):
     return os.path.normpath(os.path.join(cwd, os.path.expandvars(os.path.expanduser(arg)))) if arg else ""
 
 
-class Desktop:
+class Desktop(Worker):
     def __init__(self, host):
+        super().__init__()
         self.host = host
         self.window = None
-        self.jobs = queue.Queue()
-        self.timers = []
-        self.worker = None
         self.watchers = {}
         self.letters = None
         self.icon_cache = {}
-
-    # ---- Atlas's own thread: requests, one at a time, and the timers ------------------------------
-    def call_main(self, fn, *a):
-        self.jobs.put((fn, a))
-
-    def call_main_wait(self, fn, *a):
-        if threading.current_thread() is self.worker:
-            return fn(*a)
-        done, out = threading.Event(), {}
-
-        def run():
-            try:
-                out["v"] = fn(*a)
-            finally:
-                done.set()
-        self.call_main(run)
-        done.wait(10)
-        return out.get("v")
-
-    def every(self, ms, fn):
-        self.timers.append([ms / 1000.0, time.monotonic() + ms / 1000.0, fn])
-
-    def run_loop(self):
-        while True:
-            now = time.monotonic()
-            wait = max(0.0, min((t[1] for t in self.timers), default=now + 1) - now)
-            try:
-                fn, a = self.jobs.get(timeout=wait)
-                try:
-                    fn(*a)
-                except Exception:  # one failed request must not stop the others
-                    pass
-            except queue.Empty:
-                pass
-            now = time.monotonic()
-            for t in list(self.timers):
-                if t[1] <= now:
-                    t[1] = now + t[0]
-                    try:
-                        if t[2]() is False:   # a timer that is done
-                            self.timers.remove(t)
-                    except Exception:
-                        pass
 
     # ---- The window's own thread -------------------------------------------------------------------
     def form(self):
@@ -153,8 +107,7 @@ class Desktop:
 
     # ---- Starting up: before the window, and once it is made ------------------------------------------
     def start(self):
-        self.worker = threading.Thread(target=self.run_loop, daemon=True)
-        self.worker.start()
+        self.start_worker()
         if not self.host.pick:
             threading.Thread(target=self.listen, daemon=True).start()
         self.every(2000, self.check_drives)

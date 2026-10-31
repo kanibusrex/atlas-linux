@@ -3,7 +3,7 @@ Atlas on Linux: what atlas.py asks of the desktop here. GTK and GIO do the work 
 shares through GVFS, the clipboard, the icon theme, "Open with", the Omarchy theme), always on GTK's own
 thread, the one pywebview's window runs on: requests from the page are handed to it with call_main.
 
-The same few names (Desktop, DATA_DIR, CACHE_DIR, LINUX) are what a desktop for macOS or Windows gives.
+The same few names (Desktop, DATA_DIR, CACHE_DIR, SYSTEM) are what a desktop for macOS or Windows gives.
 """
 
 import os
@@ -21,7 +21,7 @@ from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, WebKit2  # noqa: E402
 
 import atlas_core as core  # noqa: E402
 
-LINUX = True
+SYSTEM = "linux"
 APP_ID = "dev.atlas.Atlas"
 DATA_DIR = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")), "atlas")
 CACHE_DIR = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "atlas")

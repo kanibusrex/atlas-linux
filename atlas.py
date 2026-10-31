@@ -49,8 +49,10 @@ if sys.platform.startswith("linux"):
     import atlas_linux as desktop  # noqa: E402
 elif sys.platform == "win32":
     import atlas_windows as desktop  # noqa: E402
+elif sys.platform == "darwin":
+    import atlas_mac as desktop  # noqa: E402
 else:
-    sys.exit("Atlas runs on Linux and Windows for now.")
+    sys.exit("Atlas runs on Linux, Windows and macOS.")
 
 import webview  # noqa: E402
 
@@ -63,10 +65,11 @@ PAGE_STATE = os.path.join(DATA_DIR, "page.json")   # the page's saved choices: f
 THUMB_DIR = os.path.join(desktop.CACHE_DIR, "thumbs")
 
 # what the page is given before its own script runs: __atlasHost, which works like the window.chrome.webview
-# it talked to in the Windows Atlas, its saved choices, and where to ask for files and icons. (Not
+# it talked to in the Windows Atlas, the system it's on, its saved choices, and where to ask for files and icons. (Not
 # window.chrome.webview itself: on Windows pywebview's own messages go through the real one.)
 BRIDGE = r"""
 window.__atlasLinux = %(linux)s;
+window.__atlasSystem = %(system)s;
 window.__atlasRes = %(res)s;
 (function () {
   var listeners = [], waiting = [];
@@ -383,7 +386,7 @@ class Host:
             return self.reply(rid, True)
         if op == "hello":
             self.reply(rid, {"start": self.start_path, "native": True, "version": VERSION, "frameless": False,
-                             "max": self.is_max, "linux": desktop.LINUX, "zoom": float(self.prefs.get("Zoom", 1.15)),
+                             "max": self.is_max, "linux": desktop.SYSTEM != "windows", "zoom": float(self.prefs.get("Zoom", 1.15)),
                              "isDefault": self.desktop.is_default()})
             self.page_ready = True
             if os.environ.get("ATLAS_DEBUG"):
@@ -600,7 +603,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def page(self, host):
         with open(PAGE, "rb") as f:
             data = f.read()
-        js = BRIDGE % {"linux": "true" if desktop.LINUX else "false", "res": to_json(host.base),
+        # the page's paths are /-separated everywhere but Windows (its "Linux" mode is macOS's too)
+        js = BRIDGE % {"linux": "true" if desktop.SYSTEM != "windows" else "false", "system": to_json(desktop.SYSTEM), "res": to_json(host.base),
                        "saved": to_json(host.saved).replace("</", "<\\/")}
         tag = b"<head>"
         i = data.find(tag)
@@ -668,7 +672,7 @@ def main():
     if not pick and desktop.hand_over(path):
         return
     # the window's app id, as Hyprland and the launcher see it (a picker has its own, so it can float)
-    if desktop.LINUX:
+    if desktop.SYSTEM == "linux":
         from gi.repository import GLib
         GLib.set_prgname(desktop.APP_ID + ".Picker" if pick else desktop.APP_ID)
         GLib.set_application_name("Atlas")

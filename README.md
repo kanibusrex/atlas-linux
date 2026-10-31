@@ -102,9 +102,11 @@ o.bind("SUPER + A", "Atlas", "omarchy-launch-or-focus dev.atlas.Atlas \"uwsm-app
 
 To try the picker without installing it: `python3 atlas.py --pick '{"mode": "open", "multiple": true}'` prints what you chose as JSON (`mode` is `open`, `save` or `savefiles`).
 
-## Windows (preview)
+## Windows and macOS (preview)
 
 The same Atlas also builds for Windows 10 and 11: every push builds an installer on GitHub Actions (`.github/workflows/build.yml`), under the run's **atlas-windows** artifact, and a `v*` tag attaches it to that release. It installs for you alone, with no administrator rights. Windows' own requests (who has access to a folder, a group's members, mapping drives, a server's shares, what's using a file) are answered by `AtlasCore.ps1`, the original Windows Atlas's file work. It needs the WebView2 runtime, which Windows 11 has, and Windows 10 gets with Microsoft Edge.
+
+For macOS (Apple silicon), the same workflow builds `Atlas.app` in a disk image, under the **atlas-mac** artifact. It isn't signed by Apple, so the first time, right-click Atlas and choose Open (or run `xattr -cr /Applications/Atlas.app`). The Trash isn't shown as a folder there (Finder keeps where things came from to itself), but deleting goes to it, and Undo brings things back.
 
 ## Build
 
@@ -120,6 +122,8 @@ The first build fetches pywebview (pinned in `requirements.txt`) into `lib/`. Af
 | `atlas_linux.py` | What Atlas asks of the Linux desktop: drives and shares through GVFS, the clipboard, icons, Open with, D-Bus, the Omarchy theme |
 | `atlas_core.py` | File operations that work the same everywhere: listing, search, copy, rename, archives, hashes, permissions |
 | `atlas_core_linux.py` | File work that is Linux's own: drives, GVFS network places, the Trash, what's using a file, the wallpaper |
+| `atlas_core_mac.py`, `atlas_mac.py` | The same for macOS: /Volumes, the Trash, the pasteboard, Finder's icons, Quick Look thumbnails |
+| `atlas_worker.py` | The thread the Windows and macOS desktops work through (GTK's own thread does it on Linux) |
 | `atlas_core_windows.py`, `atlas_windows.py` | The same for Windows: drive letters, the Recycle Bin, the clipboard, icons; `AtlasCore.ps1` for the service-desk requests |
 | `tests/smoke_core.py` | A quick check of the file work on the system it runs on |
 | `atlas.html` | The whole interface |
