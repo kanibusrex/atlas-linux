@@ -16,6 +16,7 @@ import signal
 import stat
 import subprocess
 import threading
+import time
 
 import atlas_core as core
 
@@ -258,18 +259,100 @@ def bad_name(_n):
     return ""
 
 
-def listing(_full, out):
+def listing(full, out):
     """A folder's listing as the page is given it: apps (Safari.app) are one thing to open, as in Finder,
-    not folders to go into."""
-    for e in out.get("entries", []):
-        if e["d"] and e["n"].lower().endswith(".app"):
-            e["d"] = False
+    not folders to go into, with the size of everything in them."""
+    apps = [e for e in out.get("entries", []) if e["d"] and e["n"].lower().endswith(".app")]
+    for e in apps:
+        e["d"] = False
+    sizes = app_sizes([e.get("p") or core.join(full, e["n"]) for e in apps])
+    for e in apps:
+        e["s"] = sizes.get(e.get("p") or core.join(full, e["n"]), 0)
     return out
+
+
+# ---- How big an app is: everything in its bundle, as Finder counts it ------------------------------
+_counted = {}   # app -> (its modified time, bytes), for apps counted file by file
+
+
+def _count(app):
+    """Adds up every file in an app, links not followed (a framework's links point inside it)."""
+    total, stack = 0, [app]
+    while stack:
+        try:
+            with os.scandir(stack.pop()) as it:
+                for de in it:
+                    try:
+                        if de.is_dir(follow_symlinks=False):
+                            stack.append(de.path)
+                        else:
+                            total += de.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+    return total
+
+
+def _stamp(app):
+    try:
+        return os.stat(app).st_mtime_ns
+    except OSError:
+        return 0
+
+
+def spotlight_sizes(apps):
+    """What Spotlight knows of apps' sizes, in one ask: {app: bytes}, for those it has indexed."""
+    if not apps:
+        return {}
+    try:
+        r = subprocess.run(["/usr/bin/mdls", "-name", "kMDItemLogicalSize", "-raw", "-nullMarker", ""] + apps,
+                           capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    vals = r.stdout.decode("utf-8", "replace").split("\0")
+    return {a: int(v) for a, v in zip(apps, vals) if v.strip().isdigit() and int(v) > 0}
+
+
+def app_sizes(apps, budget=1.5):
+    """{app: bytes} for apps: Spotlight's figure, or (for apps it doesn't know) counted, as long as the
+    counting takes, in all, no more than budget seconds; the rest are counted in the background, ready for
+    next time."""
+    out = spotlight_sizes(apps)
+    left = []
+    for a in apps:
+        if a in out:
+            continue
+        was = _counted.get(a)
+        if was and was[0] == _stamp(a):
+            out[a] = was[1]
+        else:
+            left.append(a)
+    until = time.monotonic() + budget
+    while left and time.monotonic() < until:
+        a = left.pop(0)
+        _counted[a] = (_stamp(a), _count(a))
+        out[a] = _counted[a][1]
+    if left:
+        def later(rest=left):
+            for a in rest:
+                _counted[a] = (_stamp(a), _count(a))
+        threading.Thread(target=later, daemon=True).start()
+    return out
+
+
+def details(path):
+    r = core.details(path)
+    if r.get("d") and path.rstrip("/").lower().endswith(".app"):
+        r["d"] = False
+        r["s"] = app_sizes([path], budget=60).get(path, 0)
+    return r
 
 
 # requests answered here, each given the page's arguments and the request's State
 OPS = {
     "drives": lambda a, state: drives(),
+    "details": lambda a, state: details(str(a.get("path"))),
     "delete": lambda a, state: remove_items(a.get("paths"), bool(a.get("permanent")), state),
     "recyclable": lambda a, state: {"ok": True},
     "restore": lambda a, state: trash_restore(a.get("paths")),

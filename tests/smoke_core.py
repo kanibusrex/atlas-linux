@@ -115,6 +115,12 @@ try:
         r = run("list", path="/Applications")
         apps = [e for e in r.get("entries", []) if e["n"].endswith(".app")]
         check("apps are listed as apps, not folders", apps and not any(e["d"] for e in apps), r.get("entries", [])[:5])
+        calc = "/System/Applications/Calculator.app"
+        counted = core.system._count(calc)
+        print("info  Calculator.app: Spotlight says %s, counted %d" % (core.system.spotlight_sizes([calc]).get(calc), counted))
+        r = run("list", path="/System/Applications")
+        shown = next((e["s"] for e in r.get("entries", []) if e["n"] == "Calculator.app"), 0)
+        check("an app's size is everything in it", counted > 1000000 and abs(shown - counted) <= counted // 20, {"shown": shown, "counted": counted})
 
     if sys.platform == "win32":
         r = run("list", path=top[:2])
