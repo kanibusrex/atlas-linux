@@ -176,7 +176,9 @@ def smb_shares(server, user, domain, password):
     server = server.strip().strip("/\\")
     if not server or "/" in server or "\\" in server:
         raise RuntimeError("Type a server name, such as nas or 192.168.0.10.")
-    cmd = [exe, "-L", "//" + server, "-g"]
+    # -s /dev/null: no /etc/samba/smb.conf is needed (most desktops have none, and smbclient then warns
+    # "Can't load /etc/samba/smb.conf", which used to be shown as the error).
+    cmd = [exe, "-s", "/dev/null", "-L", "//" + server, "-g"]
     env = dict(os.environ)
     if user:
         cmd += ["-U", user]
@@ -195,8 +197,9 @@ def smb_shares(server, user, domain, password):
         if len(parts) >= 2 and parts[0] == "Disk" and not parts[1].endswith("$"):
             shares.append({"name": parts[1], "comment": parts[2] if len(parts) > 2 else ""})
     if not shares and r.returncode != 0:
-        msg = (r.stderr or r.stdout).strip().splitlines()
-        msg = msg[-1] if msg else "smbclient failed."
+        msg = [ln.strip() for ln in (r.stderr + "\n" + r.stdout).splitlines()
+               if ln.strip() and "smb.conf" not in ln and "testparm" not in ln]
+        msg = next((ln for ln in reversed(msg) if "NT_STATUS_" in ln), msg[-1] if msg else "smbclient failed.")
         if "NT_STATUS_LOGON_FAILURE" in msg or "NT_STATUS_ACCESS_DENIED" in msg:
             msg = "The server turned down that user name and password."
         elif "NT_STATUS_" in msg and ("UNSUCCESSFUL" in msg or "NOT_FOUND" in msg or "TIMEOUT" in msg or "UNREACHABLE" in msg or "REFUSED" in msg):
