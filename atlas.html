@@ -90,6 +90,10 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .work { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); min-width: 0; min-height: 0; padding: 8px; gap: 8px; }
 .panes { display: grid; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); gap: 8px; min-width: 0; min-height: 0; }
 .panes.dual { grid-template-columns: 1fr 1fr; }
+.panes.triple { grid-template-columns: 1fr 1fr 1fr; }
+/* Copies beside the folders when there is room for both, below them when there isn't */
+@media (max-width: 1000px) { .panes.dual:has(> .cp-pane:not([hidden])):not(.triple) { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 1400px) { .panes.triple { grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } .panes.triple > .cp-pane { grid-column: 1 / -1; } }
 
 /* ---- Choosing files for another app: the bar along the bottom ------------------------------------- */
 #app.picking { grid-template-rows: minmax(0, 1fr) auto; }
@@ -300,6 +304,16 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 
 .status { display: flex; align-items: center; gap: 12px; height: 26px; padding: 0 14px; border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; }
 .status .grow { flex: 1; }
+.st-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; overflow: hidden; }
+/* a message has the bar to itself while it shows */
+.status.msg .st-info { display: none; }
+.st-msg { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; color: var(--text); animation: tin .2s ease-out; }
+.st-msg[hidden] { display: none; }
+.st-msg > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.st-msg.bad > span { color: var(--danger); font-weight: 600; }
+.st-msg.good > span { color: var(--ok); }
+.st-msg .tb { flex: none; border: 0; background: transparent; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 1px 6px; border-radius: 6px; }
+.st-msg .tb:hover { background: var(--surface-3); }
 .status b { color: var(--text-2); font-weight: 600; }
 
 /* This PC: the start screen */
@@ -476,10 +490,10 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .toast .tb:hover { background: var(--surface-3); }
 @keyframes tin { from { opacity: 0; transform: translateY(6px); } }
 
-.drawer { position: fixed; top: 10px; bottom: 10px; right: 10px; width: 420px; z-index: 40; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 20px 50px rgba(0,0,0,.4); }
-.drawer[hidden] { display: none; }
-.dr-h { display: flex; align-items: center; gap: 10px; padding: 12px 10px 12px 16px; background: var(--head); border-radius: 14px 14px 0 0; }
-.dr-h h3 { margin: 0; font-size: 14px; flex: 1; }
+.cp-pane[hidden] { display: none; }
+.cp-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); font-size: 12.5px; color: var(--muted); }
+.cp-tools label { flex: none; }
+.cp-tools .btn { flex: none; }
 .dr-b { flex: 1; overflow: auto; padding: 10px; }
 .cp { padding: 12px; border-radius: 10px; background: var(--surface-2); margin-bottom: 8px; }
 .cp-t { display: flex; align-items: center; gap: 8px; }
@@ -497,9 +511,7 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .pill.bad { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
 .pill.go { background: var(--accent-soft); color: var(--accent); }
 .pill.wait { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
-.cp-pace { display: flex; align-items: center; gap: 10px; padding: 10px 16px 0; font-size: 12.5px; color: var(--muted); }
-.cp-pace label { flex: none; }
-.cp-pace select { flex: 1; min-width: 0; height: 30px; padding: 0 30px 0 10px; border-radius: 7px; border: 1px solid var(--line); outline: 0; font-size: 12.5px; -webkit-appearance: none; appearance: none; background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 14px; }
+.cp-tools select { flex: 1 1 170px; min-width: 0; height: 30px; padding: 0 30px 0 10px; border-radius: 7px; border: 1px solid var(--line); outline: 0; font-size: 12.5px; -webkit-appearance: none; appearance: none; background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 14px; }
 .cp-note { color: var(--text-2); font-size: 12px; margin-top: 6px; }
 .dr-empty { padding: 40px 20px; text-align: center; color: var(--muted); }
 
@@ -680,8 +692,6 @@ button:focus-visible, .sitem:focus-visible, .mi:focus-visible { outline: 0; box-
 .pal input { border-bottom-color: var(--edge-2); }
 .pal-item { border-radius: 10px; }
 .pal-item.hot { background: var(--grad-sel); }
-.drawer { border-radius: 18px; border: 1px solid var(--edge); background: var(--grad-surface); box-shadow: var(--sh-2); }
-.dr-h { border-radius: 18px 18px 0 0; background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, var(--surface)), color-mix(in srgb, var(--accent) 5%, var(--surface))); }
 .cp { border-radius: 12px; background: var(--grad-card); border: 1px solid var(--edge-2); }
 .toast { border-radius: 12px; border: 1px solid var(--edge); border-left: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 94%, var(--text)), var(--surface-2)); box-shadow: var(--sh-2); position: relative; overflow: hidden; padding-left: 16px; }
 .toast::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--grad-accent); }
@@ -842,7 +852,6 @@ body.frameless .panes > .pane:last-child .tabs { padding-right: 150px; }
 body.frameless.pvright .panes > .pane:last-child .tabs { padding-right: 10px; }
 body.frameless.pvright .preview .pv-head { padding-right: 146px; height: 36px; app-region: drag; }
 body.frameless.pvright .preview .pv-head .ib { app-region: no-drag; }
-body.frameless .drawer { top: 40px; }
 body.frameless .rail { padding-top: 12px; }
 
 /* the drives, pinned above the scrolling side bar */
@@ -1010,15 +1019,16 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   <button data-win="max" title="Maximise"><svg viewBox="0 0 10 10" class="wmax"><rect x=".5" y=".5" width="9" height="9" rx="1"/></svg><svg viewBox="0 0 10 10" class="wres"><rect x=".5" y="2.5" width="7" height="7" rx="1"/><path d="M2.5 2.5V1.5a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1h-1"/></svg></button>
   <button data-win="close" class="wx" title="Close"><svg viewBox="0 0 10 10"><path d="M.5.5l9 9M9.5.5l-9 9"/></svg></button>
 </div>
-<div class="drawer" id="copies" hidden>
-  <div class="dr-h"><h3>Copies and moves</h3><button class="btn sm" id="cpClear">Clear finished</button><button class="ib" id="cpClose" title="Close"><svg class="ico" viewBox="0 0 24 24"><use href="#i-x"/></svg></button></div>
-  <div class="cp-pace" title="Copies to a network share can rest now and then, so a USB stick or small NAS doesn't overheat. If the share drops, Atlas waits for it and carries on."><label for="cpPace">To network shares</label><select id="cpPace">
+<section class="pane cp-pane" id="copies" hidden>
+  <div class="tabs"><div class="tstrip"><div class="tab on" style="cursor:default;max-width:none"><svg class="ico" viewBox="0 0 24 24"><use href="#i-copies"/></svg><span class="tl">Copies and moves</span><button class="tx" id="cpClose" title="Close"><svg class="ico" viewBox="0 0 24 24"><use href="#i-x"/></svg></button></div></div></div>
+  <div class="cp-tools" title="Copies to a network share can rest now and then, so a USB stick or small NAS doesn't overheat. If the share drops, Atlas waits for it and carries on."><label for="cpPace">To network shares</label><select id="cpPace">
     <option value="full">Full speed</option>
     <option value="gentle">Gentle: rest 20 s every 512 MB</option>
     <option value="gentlest">Gentlest: 6 MB/s, rest 45 s every 256 MB</option>
-  </select></div>
+  </select><button class="btn sm" id="cpClear">Clear finished</button></div>
   <div class="dr-b" id="cpList"></div>
-</div>
+  <div class="status"><div class="st-info" id="cpStatus"></div></div>
+</section>
 <div class="toasts" id="toasts"></div>
 <div class="nohost" id="nohost" hidden><div class="box">
   <svg class="ico" viewBox="0 0 24 24" style="width:40px;height:40px;color:var(--accent)"><use href="#i-folder"/></svg>
@@ -1308,8 +1318,45 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   function thumbUrl(p, size) { return RES + "thumb?p=" + encodeURIComponent(p) + "&s=" + size; }
 
   /* ---- Toasts and dialogs ------------------------------------------------------------------------- */
+  // Messages show in the status bar of the pane you are working in, one at a time: a new one takes over at once,
+  // except that an error, or one with a button, gets a moment to be seen first. Where there's no bar to see (a
+  // picker has none, a dialog covers it, or the page is still starting) it floats instead.
+  var msgNow = null, msgQ = [], msgT = 0, msgAt = 0;
+  function msgMatters(m) { return m.bad || m.action; }
   function toast(msg, opts) {
     opts = opts || {};
+    var bar = panes[activePane] && panes[activePane].el && panes[activePane].el.querySelector(".status");
+    if (PICK || openDialog || !bar || !bar.isConnected) { toastFloat(msg, opts); return; }
+    msgQ = msgQ.filter(msgMatters);
+    msgQ.push({ text: String(msg), bad: opts.bad, good: opts.good, action: opts.action, run: opts.run, ms: opts.ms || (opts.action ? 7000 : opts.bad ? 6000 : 3800) });
+    msgNext();
+  }
+  function msgNext() {
+    clearTimeout(msgT);
+    var wait = msgNow && msgMatters(msgNow) ? 1500 - (Date.now() - msgAt) : 0;
+    if (wait > 0) { msgT = setTimeout(msgNext, wait); return; }
+    msgNow = msgQ.shift() || null;
+    msgAt = Date.now();
+    paintMsg();
+    if (msgNow) { msgT = setTimeout(msgEnd, msgNow.ms); }
+  }
+  function msgEnd() { clearTimeout(msgT); msgNow = null; msgNext(); }
+  function paintMsg() {
+    panes.forEach(function (p, i) {
+      if (!p || !p.el) { return; }
+      var box = p.el.querySelector(".status"), el = box.querySelector(".st-msg"), m = i === activePane ? msgNow : null;
+      box.classList.toggle("msg", !!m);
+      el.hidden = !m;
+      if (!m) { el.innerHTML = ""; return; }
+      el.className = "st-msg" + (m.bad ? " bad" : m.good ? " good" : "");
+      el.innerHTML = "<span title='" + esc(m.text) + "'>" + esc(m.text) + "</span>" + (m.action ? "<button class='tb'>" + esc(m.action) + "</button>" : "");
+      if (m.action) { el.querySelector(".tb").onclick = function () { msgEnd(); m.run(); }; }
+      // it stays while the pointer is on it, to read the end of a long one or reach its button
+      el.onmouseenter = function () { clearTimeout(msgT); };
+      el.onmouseleave = function () { if (msgNow) { clearTimeout(msgT); msgT = setTimeout(msgEnd, 2000); } };
+    });
+  }
+  function toastFloat(msg, opts) {
     var t = D.createElement("div");
     t.className = "toast" + (opts.bad ? " bad" : opts.good ? " good" : "");
     t.innerHTML = "<span>" + esc(msg) + "</span>" + (opts.action ? "<button class='tb'>" + esc(opts.action) + "</button>" : "");
@@ -1467,19 +1514,22 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       "<div class='banner' hidden></div>" +
       "<div class='head cols'></div>" +
       "<div class='list' tabindex='0'><div class='spacer'></div></div>" +
-      "<div class='status'></div>";
+      "<div class='status'><div class='st-info'></div><div class='st-msg' hidden></div></div>";
     p.el = el;
     wirePane(i);
     return el;
   }
   function layout() {
-    var box = $("panes");
+    var box = $("panes"), cp = $("copies");
+    // the preview may be docked in a pane that is about to go (the right one, when Split is turned off): placePreview puts it back
+    D.querySelector(".work").appendChild($("preview"));
     box.innerHTML = "";
-    box.classList.toggle("dual", S.dual);
     for (var i = 0; i < (S.dual ? 2 : 1); i++) {
       if (!panes[i]) { panes[i] = makePane(null); panes[i].tabs[0].path = cur().path; openPath(panes[i].tabs[0], cur().path, { replace: true }); }
       box.appendChild(panes[i].el || buildPane(i));
     }
+    box.appendChild(cp);
+    splitClasses();
     if (!S.dual && activePane > 0) { activePane = 0; }
     panes.forEach(function (p, i) { if (p.el) { p.el.classList.toggle("active", i === activePane); } });
     $("rDual").classList.toggle("on", S.dual);
@@ -1490,14 +1540,21 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     $("side").classList.toggle("closed", !S.side);
     for (var j = 0; j < (S.dual ? 2 : 1); j++) { paintPane(j); }
     paintPreview();
+    paintMsg();
     save();
+  }
+  // how the split is laid out: one or two folder panes, and Copies beside them when it's open
+  function splitClasses() {
+    var box = $("panes"), cp = !$("copies").hidden;
+    box.classList.toggle("dual", S.dual || cp);
+    box.classList.toggle("triple", S.dual && cp);
   }
   function setActive(i) {
     if (i === activePane || !panes[i]) { return; }
     activePane = i;
     panes.forEach(function (p, k) { if (p.el) { p.el.classList.toggle("active", k === activePane); } });
     placePreview();
-    paintSide(); paintPreview(); setTitle();
+    paintSide(); paintPreview(); setTitle(); paintMsg();
   }
   // the preview sits at the bottom of the pane you are working in, or on the right of the window
   function placePreview() {
@@ -2197,7 +2254,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
 
   /* ---- Status bar ---------------------------------------------------------------------------------- */
   function paintStatus(i) {
-    var p = panes[i], t = tabOf(p), box = p.el.querySelector(".status");
+    var p = panes[i], t = tabOf(p), box = p.el.querySelector(".st-info");
     if (t.path === "" && t.mode === "folder") { box.innerHTML = "<span>" + plural(drives.length, "drive") + "</span><span class='grow'></span><span>" + esc(whoAmI.user || "") + (whoAmI.machine ? " on " + esc(whoAmI.machine) : "") + "</span>"; return; }
     if (t.mode === "space") { box.innerHTML = "<span>" + (t.space && t.space.done ? "Added up " + plural(t.space.rows.length, "folder") : "Adding up\u2026") + "</span><span class='grow'></span><span>Click a folder to look inside it</span>"; return; }
     var v = viewOf(t), sel = selected(t);
@@ -2712,8 +2769,16 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
 
   /* ---- The copy queue ------------------------------------------------------------------------------ */
   var copyState = {}, copyList = [];
+  function hideCopies() {
+    $("copies").hidden = true; $("rCopies").classList.remove("on");
+    splitClasses();
+    W.dispatchEvent(new Event("resize"));
+  }
   function showCopies() {
     $("copies").hidden = false; $("rCopies").classList.add("on");
+    splitClasses();
+    W.dispatchEvent(new Event("resize"));
+    paintCopies(copyList);
     api("copypace", {}).then(function (p) { if (p) { $("cpPace").value = p; } }).catch(function () { });
   }
   function paintCopies(list) {
@@ -2737,6 +2802,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       copyState[c.id] = c.status;
     });
     if ($("copies").hidden) { return; }
+    var waitingN = list.filter(function (c) { return c.status === "waiting"; }).length;
+    $("cpStatus").innerHTML = "<span>" + (active ? (active - waitingN) + " running" + (waitingN ? ", " + waitingN + " waiting" : "") : list.length ? "All finished" : "Nothing running") + "</span>";
     if (!list.length) { $("cpList").innerHTML = "<div class='dr-empty'>Nothing copied yet. Copies and moves show here while they run, with their progress.</div>"; return; }
     $("cpList").innerHTML = list.slice().reverse().map(function (c) {
       var pct = c.bytesTotal ? Math.min(100, Math.round(c.bytesDone / c.bytesTotal * 100)) : (c.status === "done" ? 100 : 0);
@@ -4558,8 +4625,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   });
   $("rSpace").onclick = function () { var t = cur(); openSpace(t, t.mode === "space" ? t.space.path : t.path); };
   $("rRename").onclick = function () { bulkRename(cur()); };
-  $("rCopies").onclick = function () { if ($("copies").hidden) { showCopies(); paintCopies(copyList); } else { $("copies").hidden = true; $("rCopies").classList.remove("on"); } };
-  $("cpClose").onclick = function () { $("copies").hidden = true; $("rCopies").classList.remove("on"); };
+  $("rCopies").onclick = function () { if ($("copies").hidden) { showCopies(); } else { hideCopies(); } };
+  $("cpClose").onclick = hideCopies;
   $("cpClear").onclick = function () { api("copyctl", { action: "clear" }).catch(fail); };
   $("cpPace").addEventListener("change", function (ev) { api("copypace", { pace: ev.target.value }).then(function (p) { toast("Copies to network shares: " + ({ full: "full speed", gentle: "gentle", gentlest: "gentlest" })[p] + ".", { good: true }); }).catch(fail); });
   $("cpList").addEventListener("click", function (ev) { var b = ev.target.closest("[data-cc]"); if (b) { api("copyctl", { copy: +b.getAttribute("data-cc"), action: b.getAttribute("data-act") }).catch(fail); } });

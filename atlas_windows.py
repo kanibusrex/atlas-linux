@@ -193,7 +193,7 @@ class Desktop(Worker):
         return ans == WinForms.DialogResult.Yes
 
     def stop(self):
-        for w in self.watchers.values():
+        for w in list(self.watchers.values()):
             w.EnableRaisingEvents = False
             w.Dispose()
         self.watchers = {}

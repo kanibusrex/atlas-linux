@@ -58,7 +58,7 @@ else:
 
 import webview  # noqa: E402
 
-VERSION = "1.2.7"
+VERSION = "1.2.8"
 DATA_DIR = desktop.DATA_DIR
 PAGE = os.path.join(HERE, "atlas.html")
 BG = "#1a1b1e"
@@ -204,6 +204,7 @@ class Host:
         self.is_max = False
         self.window = None
         self.outbox = queue.Queue()
+        self.watches = queue.Queue()
         os.makedirs(DATA_DIR, exist_ok=True)
         self.prefs_path = os.path.join(DATA_DIR, "atlas.json")
         # UpdateCheck: look for a new version on GitHub (at most daily); UpdateLast, when it last did; UpdateSkip, one not wanted
@@ -253,12 +254,16 @@ class Host:
         else:
             title, w, h, maxed = "Atlas", int(self.prefs["W"]), int(self.prefs["H"]), bool(self.prefs.get("Max"))
         self.is_max = maxed
+        # A tiling window manager (Hyprland) gives a window its slot whatever minimum it asks for, and shrinks
+        # what the window draws to fit, squashing the text: so on Linux, a minimum that any slot will meet.
+        small = (320, 240) if desktop.SYSTEM == "linux" else (760, 480)
         self.window = webview.create_window(title, self.base + "atlas.html" + q, js_api=Api(self), width=w, height=h,
-                                            min_size=(760, 480), maximized=maxed, background_color=BG, text_select=True)
+                                            min_size=small, maximized=maxed, background_color=BG, text_select=True)
         self.window.events.before_show += lambda: self.desktop.attach(self.window)
         self.window.events.closing += self.on_closing
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         threading.Thread(target=self.sender, daemon=True).start()
+        threading.Thread(target=self.watcher, daemon=True).start()
         self.desktop.start()
         self.desktop.every(50, self.tick)
         debug = bool(os.environ.get("ATLAS_DEBUG"))
@@ -287,6 +292,25 @@ class Host:
                 self.window.run_js("window.__atlasRecv && window.__atlasRecv([" + ",".join(items) + "]);")
             except Exception:
                 pass
+
+    def watcher(self):
+        # Watching a folder asks where it lives, and a share that has gone quiet can take a minute to answer:
+        # never on the window's thread, or the window stops responding. Only the newest list of folders matters;
+        # the page waits for its answer before ejecting, so everyone waiting is answered once it is done.
+        while True:
+            items = [self.watches.get()]
+            while True:
+                try:
+                    items.append(self.watches.get_nowait())
+                except queue.Empty:
+                    break
+            try:
+                self.desktop.watch(items[-1][1])
+            except Exception:
+                if os.environ.get("ATLAS_DEBUG"):
+                    traceback.print_exc()
+            for rid, _paths in items:
+                self.reply(rid, True)
 
     def reply(self, rid, data=None, error=""):
         if error:
@@ -367,8 +391,7 @@ class Host:
             self.send_copies(True)
             return self.reply(rid, True)
         if op == "watch":
-            self.desktop.watch([str(p) for p in m.get("paths") or []])
-            return self.reply(rid, True)
+            return self.watches.put((rid, [str(p) for p in m.get("paths") or []]))
         if op == "zoom":
             z = max(0.7, min(2.0, float(m.get("level") or 1.15)))
             self.desktop.set_zoom(z)

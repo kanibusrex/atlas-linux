@@ -248,7 +248,7 @@ class Desktop:
         return ans == Gtk.ResponseType.YES
 
     def stop(self):
-        for mon in self.monitors.values():
+        for mon in list(self.monitors.values()):   # a copy: the watcher thread may be changing them
             mon.cancel()
 
     def is_default(self):
@@ -579,6 +579,7 @@ class Desktop:
 
     # ---- Watching open folders for changes ------------------------------------------------------------
     def watch(self, paths):
+        """On the host's watcher thread, as this can wait on a network share. GIO still calls back on GTK's thread."""
         want = set(paths)
         for p in list(self.monitors):
             if p not in want:
