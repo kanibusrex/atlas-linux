@@ -33,5 +33,27 @@ osascript -e 'tell application "System Events" to set frontmost of (first proces
           -e 'tell application "System Events" to keystroke "q" using command down' >/dev/null 2>&1
 for _ in $(seq 1 15); do kill -0 $atlas 2>/dev/null || break; sleep 1; done
 if kill -0 $atlas 2>/dev/null; then echo "Atlas didn't quit when asked (Cmd+Q); ended it."; kill $atlas; else echo "Atlas quit"; fi
+
+# the preview on the right, with a document in it: all the PDF's pages, the Word file's formatting
+mkdir -p try/samples
+cp tests/samples/* try/samples/
+python3 - "$HOME/Library/Application Support/Atlas/page.json" <<'PY'
+import json, sys
+try:
+    page = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    page = {}
+page.update(pvPos="right", preview=True)
+json.dump(page, open(sys.argv[1], "w"))
+PY
+for name in sample.pdf sample.docx; do
+  "$APP" "$PWD/try/samples/$name" &
+  atlas=$!
+  sleep 20
+  screencapture -x "try/3-$name.png"
+  kill -0 $atlas 2>/dev/null || fail "Atlas closed by itself previewing $name."
+  kill $atlas
+  sleep 3
+done
 echo "---- atlas.log"
 cat "$ATLAS_LOG"

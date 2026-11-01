@@ -264,6 +264,7 @@ class Host:
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         threading.Thread(target=self.sender, daemon=True).start()
         threading.Thread(target=self.watcher, daemon=True).start()
+        threading.Thread(target=self.prune_thumbs, daemon=True).start()
         self.desktop.start()
         self.desktop.every(50, self.tick)
         debug = bool(os.environ.get("ATLAS_DEBUG"))
@@ -642,22 +643,36 @@ class Host:
     # ---- Thumbnails: made in the background and kept in ~/.cache/atlas/thumbs ---------------------------
     thumb_gate = threading.BoundedSemaphore(3)
 
-    def thumb(self, p, size):
+    def thumb(self, p, size, page=0):
         st = os.stat(p)
-        key = hashlib.sha1(("%s|%d|%d|%d" % (p, st.st_mtime_ns, st.st_size, size)).encode()).hexdigest()
+        key = hashlib.sha1(("%s|%d|%d|%d|%d" % (p, st.st_mtime_ns, st.st_size, size, page)).encode()).hexdigest()
         out = os.path.join(THUMB_DIR, key + ".png")
         if not os.path.exists(out):
             os.makedirs(THUMB_DIR, exist_ok=True)
             tmp = out + ".part"
             ext = os.path.splitext(p)[1].lower()
             with self.thumb_gate:
-                self.desktop.make_thumb(p, ext, size, tmp, ext in VIDEO)
+                if page:
+                    self.desktop.pdf_page(p, page, size, tmp)
+                else:
+                    self.desktop.make_thumb(p, ext, size, tmp, ext in VIDEO)
             if os.path.exists(tmp) and os.path.getsize(tmp):
                 os.replace(tmp, out)
         if not os.path.exists(out):
             return None
         with open(out, "rb") as f:
             return f.read()
+
+    def prune_thumbs(self):
+        # a long PDF leaves a picture of every page read: the ones not made for a month are let go
+        try:
+            old = time.time() - 30 * 86400
+            with os.scandir(THUMB_DIR) as it:
+                for f in it:
+                    if f.is_file() and f.stat().st_mtime < old:
+                        os.remove(f.path)
+        except OSError:
+            pass
 
 
 # ---- The page, and the files for the preview pane, file-type icons and thumbnails ----------------------
@@ -695,10 +710,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if what == "thumb":
                 size = max(64, min(1600, int((q.get("s") or ["256"])[0] or 256)))
                 try:
-                    png = host.thumb((q.get("p") or [""])[0], size)
+                    png = host.thumb((q.get("p") or [""])[0], size, max(0, int((q.get("pg") or ["0"])[0] or 0)))
                 except Exception:  # a thumbnail that can't be made just isn't shown
                     png = None
                 return self.send_data(png, "image/png", cache=True) if png else self.send_error(404)
+            if what == "pdfinfo":
+                ask = getattr(host.desktop, "pdf_info", None)
+                info = ask((q.get("p") or [""])[0]) if ask else None
+                return self.send_data(to_json(info).encode(), "application/json")
             if what == "file":
                 p = (q.get("p") or [""])[0]
                 if not p or core.kind(p) != 1:

@@ -38,6 +38,28 @@ try {
   $atlas.CloseMainWindow() | Out-Null
   if (-not $atlas.WaitForExit(15000)) { $atlas.Kill(); throw "Atlas didn't close when asked." }
   "Atlas closed"
+
+  # Documents marked as downloaded from the internet (Mark of the Web, which stops Explorer's preview pane
+  # showing them). Atlas shows them itself: the pictures should show the documents, and the mark must stay.
+  New-Item -ItemType Directory -Force try\motw | Out-Null
+  Copy-Item tests\samples\* try\motw
+  $saved = "$env:LOCALAPPDATA\Atlas\page.json"
+  $page = Get-Content $saved -Raw | ConvertFrom-Json
+  $page | Add-Member -Force pvPos "right"
+  $page | Add-Member -Force preview $true
+  [IO.File]::WriteAllText($saved, ($page | ConvertTo-Json -Depth 30))
+  foreach ($name in "sample.pdf", "sample.docx") {
+    $file = (Resolve-Path "try\motw\$name").Path
+    Set-Content -LiteralPath $file -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+    $atlas = Start-Process dist\Atlas\Atlas.exe -ArgumentList "`"$file`"" -PassThru
+    Start-Sleep 20
+    Shot "3-marked-$name"
+    if ($atlas.HasExited) { throw "Atlas closed by itself previewing $name" }
+    $atlas.CloseMainWindow() | Out-Null
+    if (-not $atlas.WaitForExit(15000)) { $atlas.Kill() }
+    if (-not (Get-Content -LiteralPath $file -Stream Zone.Identifier -ErrorAction SilentlyContinue)) { throw "Previewing $name took its mark away" }
+    "$name previewed, and still marked"
+  }
 } finally {
   "---- atlas.log"
   Get-Content $env:ATLAS_LOG -ErrorAction SilentlyContinue

@@ -399,6 +399,38 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .pv-facts dd { margin: 0; color: var(--text-2); word-break: break-all; user-select: text; }
 .pv-none { padding: 40px 20px; text-align: center; color: var(--muted); }
 .pv-grip { display: none; }
+/* on the right: half the window by default (drag its edge), with a document taking all the height it can */
+body.pvright #app:not(.picking) .work { grid-template-columns: minmax(0, 1fr) minmax(0, var(--pvw, 50%)); }
+body.pvright .preview:not(.dock) { width: auto; position: relative; }
+.preview:not(.dock) .pv-grip { display: block; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 3; }
+.preview:not(.dock) .pv-grip:hover { background: color-mix(in srgb, var(--accent) 45%, transparent); }
+.pvdrag { user-select: none; }
+.pvdrag iframe { pointer-events: none; }   /* or the drag is lost over a PDF */
+.preview:not(.dock) .pv-body { display: flex; flex-direction: column; min-height: 0; }
+.preview:not(.dock) .pv-name { order: 1; }
+.preview:not(.dock) .pv-kind { order: 2; }
+.preview:not(.dock) .pv-acts { order: 3; }
+.preview:not(.dock) .pv-stage { order: 4; flex: none; }
+.preview:not(.dock) #pvFacts { order: 5; flex: none; max-height: 120px; overflow: auto; }
+.preview:not(.dock) .pv-stage.tall, .preview:not(.dock) .pv-stage.fill { flex: 1 1 0; min-height: 240px; position: relative; overflow: hidden; }
+.preview:not(.dock) .pv-stage.tall > * { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; }
+.preview:not(.dock) .pv-stage.fill > img.pic, .preview:not(.dock) .pv-stage.fill > video { position: absolute; inset: 0; margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
+/* the pages of a PDF, one under the other */
+.pv-pages { overflow: auto; padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 10px; background: var(--surface-2); }
+.pv-pages img { display: block; width: 100%; max-width: 1100px; height: auto; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.35); flex: none; }
+.pv-pages p { margin: 0; color: var(--muted); font-size: 12px; }
+/* a Word document, on paper */
+.pv-doc.paper { background: #fff; color: #1d1d1f; font-family: "Segoe UI", Calibri, "Helvetica Neue", Arial, "Liberation Sans", sans-serif; font-size: 13.5px; line-height: 1.5; padding: 26px 30px; }
+.pv-doc.paper h1, .pv-doc.paper h2, .pv-doc.paper h3, .pv-doc.paper h4 { margin: 16px 0 8px; line-height: 1.25; color: #1d1d1f; }
+.pv-doc.paper h1 { font-size: 24px; }
+.pv-doc.paper h2 { font-size: 19px; }
+.pv-doc.paper h3 { font-size: 16px; }
+.pv-doc.paper h4 { font-size: 14px; }
+.pv-doc.paper ul { margin: 0 0 8px; padding-left: 22px; }
+.pv-doc.paper img { max-width: 100%; height: auto; }
+.pv-doc.paper table { margin: 0 0 10px; font-size: 12.5px; max-width: 100%; }
+.pv-doc.paper td { border-color: #bbb; white-space: normal; max-width: none; vertical-align: top; }
+.pv-doc.paper td p { margin: 0; }
 .preview.dock { width: auto; height: var(--pvh, 230px); flex: 0 1 var(--pvh, 230px); min-height: 110px; position: relative; border: 0; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 0; overflow: visible; }
 .preview.dock .pv-grip { display: block; position: absolute; left: 0; right: 0; top: -4px; height: 8px; cursor: ns-resize; z-index: 3; }
 .preview.dock .pv-head { position: absolute; top: 5px; right: 6px; height: auto; padding: 0; background: transparent; z-index: 2; gap: 2px; }
@@ -1167,7 +1199,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
 
   /* ---- Saved choices ----------------------------------------------------------------------------- */
   var KEY = "fileDesk.v1";
-  var S = { theme: "graphitedk", favs: [], groups: [], recent: [], servers: [], shares: [], hidden: false, dual: false, preview: true, side: true, mill: true, pvPos: "bottom", pvH: 200, session: null };
+  var S = { theme: "graphitedk", favs: [], groups: [], recent: [], servers: [], shares: [], hidden: false, dual: false, preview: true, side: true, mill: true, pvPos: "bottom", pvH: 200, pvW: 50, session: null };
   try { var saved = JSON.parse((W.__atlasStore ? W.__atlasStore.get() : localStorage.getItem(KEY)) || "null"); if (saved) { for (var sk in saved) { S[sk] = saved[sk]; } } } catch (e) { }
   if (!Array.isArray(S.groups)) { S.groups = []; }
   if (W.__atlasLinux && (W.__atlasSystem || "linux") === "linux" && !S.omarchyOnce) { S.theme = "omarchy"; S.omarchyOnce = true; }
@@ -1561,6 +1593,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var pv = $("preview"), dock = S.pvPos !== "right";
     pv.classList.toggle("dock", dock);
     pv.style.setProperty("--pvh", (S.pvH || 230) + "px");
+    D.querySelector(".work").style.setProperty("--pvw", (S.pvW || 50) + "%");
     $("pvPos").title = dock ? "Move the preview to the right" : "Move the preview to the bottom";
     $("pvPos").innerHTML = svg(dock ? "panel" : "panelb");
     var want = dock && panes[activePane] && panes[activePane].el ? panes[activePane].el : D.querySelector(".work");
@@ -3237,11 +3270,11 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     }
     var st = $("pvStage");
     if (!e.d) {
-      if (k === "image" && e.s < 60 * 1048576) { st.innerHTML = "<img class='pic' alt='' src='" + esc(fileUrl(e.p)) + "'>"; }
-      else if (k === "pdf" && LINUX) { st.innerHTML = "<img class='pic' alt='The first page' src='" + esc(thumbUrl(e.p, 900)) + "' onerror='this.replaceWith(document.createTextNode(\"\"))'>"; }
+      if (k === "image" && e.s < 60 * 1048576) { st.classList.add("fill"); st.innerHTML = "<img class='pic' alt='' src='" + esc(fileUrl(e.p)) + "'>"; }
+      else if (k === "pdf" && OMARCHY) { pdfPages(e, st, ticket); }   // WebKitGTK can't show a PDF itself; WebView2 and macOS's WebKit can
       else if (k === "pdf") { st.classList.add("tall"); st.innerHTML = "<iframe title='PDF preview' src='" + esc(fileUrl(e.p)) + "#toolbar=0&view=FitH'></iframe>"; }
-      else if (k === "video" && /\.(mp4|webm|m4v|mov)$/.test(extOf(e.n))) { st.innerHTML = "<video controls preload='metadata'" + (LINUX ? " poster='" + esc(thumbUrl(e.p, 640)) + "'" : "") + " src='" + esc(fileUrl(e.p)) + "'></video>"; }
-      else if (k === "video" && LINUX) { st.innerHTML = "<img class='pic' alt='' src='" + esc(thumbUrl(e.p, 640)) + "' onerror='this.replaceWith(document.createTextNode(\"\"))'>"; }
+      else if (k === "video" && /\.(mp4|webm|m4v|mov)$/.test(extOf(e.n))) { st.classList.add("fill"); st.innerHTML = "<video controls preload='metadata'" + (LINUX ? " poster='" + esc(thumbUrl(e.p, 640)) + "'" : "") + " src='" + esc(fileUrl(e.p)) + "'></video>"; }
+      else if (k === "video" && LINUX) { st.classList.add("fill"); st.innerHTML = "<img class='pic' alt='' src='" + esc(thumbUrl(e.p, 640)) + "' onerror='this.replaceWith(document.createTextNode(\"\"))'>"; }
       else if (k === "audio" && /\.(mp3|wav|m4a|ogg)$/.test(extOf(e.n))) { st.innerHTML = "<audio controls preload='metadata' src='" + esc(fileUrl(e.p)) + "'></audio>"; }
       else if (/\.(docx|docm|xlsx|xlsm|pptx|pptm)$/.test(extOf(e.n)) && e.s < 40 * 1048576) { officePreview(e, st, ticket); }
       else if ((k === "text" || (k === "other" && e.s < 2 * 1048576)) && !/\.(msg|eml)$/.test(extOf(e.n)) || /\.(eml)$/.test(extOf(e.n))) {
@@ -3260,6 +3293,25 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       $("pvFacts").innerHTML = factRows([["Modified", fmtDate(d.m, true)], ["Created", fmtDate(d.c, true)], ["Opened", fmtDate(d.accessed, true)], e.o || e.x ? ["Was in", e.o ? parentOf(e.o) : "Unknown"] : ["Location", parentOf(e.p)], ["Deleted", e.x ? fmtDate(e.x, true) : ""],
         ["Contains", d.items != null ? plural(d.items, "item") : ""], ["Size", d.d ? "" : fmtSize(d.s) + " (" + (d.s || 0).toLocaleString() + " bytes)"], ["Owner", d.owner], ["Version", d.version], ["Product", d.product], ["Company", d.company], ["Attributes", d.attributes]]);
     }).catch(function () { });
+  }
+  // Every page of a PDF, as pictures made when they are scrolled to
+  function pdfPages(e, st, ticket) {
+    st.classList.add("tall");
+    st.innerHTML = "<div class='pv-note'><span class='spin' style='display:inline-block'></span></div>";
+    var noPages = function () {
+      if (ticket !== pvTicket) { return; }
+      st.classList.remove("tall");
+      st.innerHTML = iconHtml(e, e.p, true);
+    };
+    fetch(RES + "pdfinfo?p=" + encodeURIComponent(e.p)).then(function (r) { return r.ok ? r.json() : null; }).then(function (info) {
+      if (ticket !== pvTicket) { return; }
+      if (!info || !info.pages) { noPages(); return; }
+      var n = Math.min(info.pages, 500), html = "";
+      for (var i = 1; i <= n; i++) {
+        html += "<img loading='lazy' alt='Page " + i + "' style='aspect-ratio:" + info.w + "/" + info.h + "' src='" + esc(thumbUrl(e.p, 1600)) + "&pg=" + i + "'>";
+      }
+      st.innerHTML = "<div class='pv-pages'>" + html + (info.pages > n ? "<p>The first " + n + " of " + info.pages + " pages</p>" : "") + "</div>";
+    }).catch(noPages);
   }
   // Word, Excel and PowerPoint files are zip files of XML: the text is read out of them here.
   function unzip(buf) {
@@ -3287,6 +3339,14 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
         if (f.method === 0) { return Promise.resolve(dec.decode(data)); }
         var ds = new DecompressionStream("deflate-raw");
         return new Response(new Blob([data]).stream().pipeThrough(ds)).text();
+      },
+      bytes: function (name) {
+        var f = files[name];
+        if (!f) { return Promise.resolve(null); }
+        var start = f.lho + 30 + dv.getUint16(f.lho + 26, true) + dv.getUint16(f.lho + 28, true);
+        var data = u8.subarray(start, start + f.csize);
+        if (f.method === 0) { return Promise.resolve(data); }
+        return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer();
       }
     };
   }
@@ -3294,23 +3354,111 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var out = [], doc = new DOMParser().parseFromString(xml, "application/xml");
     return doc;
   }
+  // A Word document as it reads: headings, bold and italic, lists, tables and pictures (not its exact layout)
+  var docBlobs = [];
+  function wordHtml(xml, z) {
+    var doc = new DOMParser().parseFromString(xml || "", "application/xml"), count = 0, MAX = 3000, pics = [];
+    var kids = function (el) { return Array.prototype.slice.call(el.children); };
+    var val = function (el) { return el.getAttributeNS("http://schemas.openxmlformats.org/wordprocessingml/2006/main", "val") || el.getAttribute("w:val"); };
+    var on = function (props, name) {
+      var x = props && kids(props).filter(function (c) { return c.localName === name; })[0];
+      if (!x) { return false; }
+      var v = val(x);
+      return !(v === "0" || v === "false" || v === "none");
+    };
+    function picture(run) {
+      var blips = run.getElementsByTagNameNS("*", "blip"), out = "";
+      for (var i = 0; i < blips.length; i++) {
+        var rid = blips[i].getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "embed") || blips[i].getAttribute("r:embed");
+        if (rid && pics.length < 60) { pics.push(rid); out += "<img data-pic='" + (pics.length - 1) + "' alt=''>"; }
+      }
+      return out;
+    }
+    function run(r) {
+      var props = kids(r).filter(function (c) { return c.localName === "rPr"; })[0], s = "";
+      kids(r).forEach(function (c) {
+        if (c.localName === "t") { s += esc(c.textContent); }
+        else if (c.localName === "tab") { s += "&emsp;"; }
+        else if (c.localName === "br") { s += "<br>"; }
+        else if (c.localName === "drawing" || c.localName === "pict") { s += picture(c); }
+      });
+      if (!s) { return ""; }
+      if (on(props, "b")) { s = "<b>" + s + "</b>"; }
+      if (on(props, "i")) { s = "<i>" + s + "</i>"; }
+      if (on(props, "u")) { s = "<u>" + s + "</u>"; }
+      return s;
+    }
+    function inline(el) {   // the runs of a paragraph, some of them inside a link or a tracked insertion
+      return kids(el).map(function (c) {
+        if (c.localName === "r") { return run(c); }
+        return /^(hyperlink|ins|smartTag|sdt|sdtContent|fldSimple)$/.test(c.localName) ? inline(c) : "";
+      }).join("");
+    }
+    function blocks(el) {
+      var out = "", list = "";
+      var flush = function () { if (list) { out += "<ul>" + list + "</ul>"; list = ""; } };
+      kids(el).forEach(function (c) {
+        if (count >= MAX) { return; }
+        if (c.localName === "sdt" || c.localName === "sdtContent") { flush(); out += blocks(c); return; }
+        if (c.localName === "tbl") {
+          flush(); count++;
+          out += "<table>" + kids(c).filter(function (r) { return r.localName === "tr"; }).map(function (r) {
+            return "<tr>" + kids(r).filter(function (d) { return d.localName === "tc"; }).map(function (d) { return "<td>" + blocks(d) + "</td>"; }).join("") + "</tr>";
+          }).join("") + "</table>";
+          return;
+        }
+        if (c.localName !== "p") { return; }
+        var s = inline(c);
+        if (!s) { return; }
+        count++;
+        var pr = kids(c).filter(function (x) { return x.localName === "pPr"; })[0], style = "", isList = false, align = "";
+        if (pr) {
+          kids(pr).forEach(function (x) {
+            if (x.localName === "pStyle") { style = val(x) || ""; }
+            if (x.localName === "numPr") { isList = true; }
+            if (x.localName === "jc" && /^(center|right)$/.test(val(x) || "")) { align = " style='text-align:" + val(x) + "'"; }
+          });
+        }
+        if (isList) { list += "<li>" + s + "</li>"; return; }
+        flush();
+        var h = /^Title$/i.test(style) ? 1 : (/^Heading(\d)/i.exec(style) || [])[1];
+        h = h ? Math.min(4, +h + (/^Title$/i.test(style) ? 0 : 1)) : 0;
+        out += h ? "<h" + h + align + ">" + s + "</h" + h + ">" : "<p" + align + ">" + s + "</p>";
+      });
+      flush();
+      return out;
+    }
+    var body = doc.getElementsByTagNameNS("*", "body")[0];
+    var html = body ? blocks(body) : "";
+    if (!html) { return Promise.resolve("<p class='pv-note'>No text in this document.</p>"); }
+    if (count >= MAX) { html += "<p><i>The first part of a longer document.</i></p>"; }
+    if (!pics.length) { return Promise.resolve(html); }
+    // the pictures, by the names word/_rels/document.xml.rels gives them
+    return z.read("word/_rels/document.xml.rels").then(function (rx) {
+      var targets = {}, rels = new DOMParser().parseFromString(rx || "", "application/xml").getElementsByTagNameNS("*", "Relationship");
+      for (var i = 0; i < rels.length; i++) { targets[rels[i].getAttribute("Id")] = rels[i].getAttribute("Target"); }
+      return Promise.all(pics.map(function (rid, n) {
+        var to = (targets[rid] || "").replace(/^\/?(word\/)?/, "word/");
+        if (!/\.(png|jpe?g|gif|bmp|webp)$/i.test(to)) { return null; }
+        return z.bytes(to).then(function (b) {
+          if (!b) { return; }
+          var url = URL.createObjectURL(new Blob([b]));
+          docBlobs.push(url);
+          html = html.replace("<img data-pic='" + n + "' alt=''>", "<img src='" + url + "' alt=''>");
+        });
+      })).then(function () { return html; });
+    });
+  }
   function officePreview(e, st, ticket) {
+    docBlobs.forEach(function (u) { URL.revokeObjectURL(u); });
+    docBlobs = [];
     st.classList.add("tall");
     st.innerHTML = "<div class='pv-note'><span class='spin' style='display:inline-block'></span></div>";
     var x = extOf(e.n);
     fetch(fileUrl(e.p)).then(function (r) { if (!r.ok) { throw new Error("unreadable"); } return r.arrayBuffer(); }).then(function (buf) {
       var z = unzip(buf);
       if (/^\.doc/.test(x)) {
-        return z.read("word/document.xml").then(function (xml) {
-          var doc = new DOMParser().parseFromString(xml || "", "application/xml");
-          var ps = doc.getElementsByTagNameNS("*", "p"), html = "", nn = 0;
-          for (var i = 0; i < ps.length && nn < 400; i++) {
-            var ts = ps[i].getElementsByTagNameNS("*", "t"), s = "";
-            for (var j = 0; j < ts.length; j++) { s += ts[j].textContent; }
-            if (s.trim()) { html += "<p>" + esc(s) + "</p>"; nn++; }
-          }
-          return html || "<p class='pv-note'>No text in this document.</p>";
-        });
+        return z.read("word/document.xml").then(function (xml) { return wordHtml(xml, z); });
       }
       if (/^\.xls/.test(x)) {
         return z.read("xl/sharedStrings.xml").then(function (ssx) {
@@ -3342,7 +3490,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       });
     }).then(function (html) {
       if (ticket !== pvTicket) { return; }
-      st.innerHTML = "<div class='pv-doc'>" + html + "</div>";
+      st.innerHTML = "<div class='pv-doc" + (/^\.doc/.test(x) ? " paper" : "") + "'>" + html + "</div>";
     }).catch(function () {
       if (ticket !== pvTicket) { return; }
       st.classList.remove("tall");
@@ -4617,6 +4765,15 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (ev.button !== 0) { return; }
     ev.preventDefault();
     var pv = $("preview"), y0 = ev.clientY, h0 = pv.getBoundingClientRect().height;
+    if (S.pvPos === "right") {
+      // on the right: its share of the work area, leaving room for the folders either way
+      var work = D.querySelector(".work"), box = work.getBoundingClientRect();
+      D.body.style.cursor = "ew-resize"; D.body.classList.add("pvdrag");
+      var mw = function (e) { S.pvW = Math.round(Math.max(20, Math.min(80, (box.right - e.clientX) / box.width * 100))); work.style.setProperty("--pvw", S.pvW + "%"); };
+      var uw = function () { D.removeEventListener("mousemove", mw); D.removeEventListener("mouseup", uw); D.body.style.cursor = ""; D.body.classList.remove("pvdrag"); save(); W.dispatchEvent(new Event("resize")); };
+      D.addEventListener("mousemove", mw); D.addEventListener("mouseup", uw);
+      return;
+    }
     var paneH = pv.parentNode.getBoundingClientRect().height;
     D.body.style.cursor = "ns-resize";
     var mv = function (e) { S.pvH = Math.round(Math.max(120, Math.min(paneH - 170, h0 + (y0 - e.clientY)))); pv.style.setProperty("--pvh", S.pvH + "px"); };

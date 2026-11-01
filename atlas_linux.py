@@ -7,6 +7,7 @@ The same few names (Desktop, DATA_DIR, CACHE_DIR, SYSTEM) are what a desktop for
 """
 
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -635,6 +636,24 @@ class Desktop:
         if len(self.icon_cache) < 4000:
             self.icon_cache[key] = png
         return png
+
+    # Every page of a PDF, for the preview (on Windows and macOS the page's browser part shows PDFs itself)
+    def pdf_info(self, p):
+        """How many pages a PDF has, and the shape of its first. None if it can't be read (or locked with a password)."""
+        if not shutil.which("pdfinfo"):
+            return None
+        r = subprocess.run(["pdfinfo", p], capture_output=True, text=True, timeout=20, stdin=subprocess.DEVNULL)
+        pages = re.search(r"^Pages:\s+(\d+)", r.stdout, re.M)
+        size = re.search(r"^Page size:\s+([\d.]+) x ([\d.]+)", r.stdout, re.M)
+        if r.returncode or not pages:
+            return None
+        return {"pages": int(pages.group(1)), "w": float(size.group(1)) if size else 612, "h": float(size.group(2)) if size else 792}
+
+    def pdf_page(self, p, page, size, tmp):
+        subprocess.run(["pdftoppm", "-png", "-singlefile", "-f", str(page), "-l", str(page), "-scale-to", str(size), p, tmp[:-4]],
+                       capture_output=True, timeout=60, stdin=subprocess.DEVNULL)
+        if os.path.exists(tmp[:-4] + ".png"):
+            os.replace(tmp[:-4] + ".png", tmp)
 
     # A picture of a video, the first page of a PDF, a small copy of a photo: made into tmp (a PNG)
     def make_thumb(self, p, ext, size, tmp, video):
