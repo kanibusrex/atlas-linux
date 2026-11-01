@@ -211,6 +211,51 @@ def recyclable(path):
     return True
 
 
+# ---- Copies to a network place: paced, and picked up again when it drops (atlas_core.copy) -----------
+def slow_target(path):
+    """Is this folder on a network share (GVFS, or a cifs/nfs/sshfs... mount)?"""
+    path = os.path.abspath(path)
+    root = gvfs_root()
+    if path == root or path.startswith(root + os.sep):
+        return True
+    best, fs = "", ""
+    try:
+        with open("/proc/self/mounts") as f:
+            for ln in f:
+                parts = ln.split()
+                if len(parts) < 3:
+                    continue
+                mnt = _unescape_mount(parts[1])
+                if (path == mnt or path.startswith(mnt.rstrip(os.sep) + os.sep)) and len(mnt) > len(best):
+                    best, fs = mnt, parts[2]
+    except OSError:
+        return False
+    return fs in _NET_FS
+
+
+def reconnect(path):
+    """Mounts a GVFS share again after it dropped (with the password in the keyring), so a copy can carry on."""
+    root = gvfs_root()
+    path = os.path.abspath(path)
+    if not path.startswith(root + os.sep):
+        return
+    nm = path[len(root) + 1:].split(os.sep, 1)[0]
+    share = next((x for x in gvfs_shares() if os.path.basename(x["path"]) == nm), None)
+    uri = share["unc"] if share else ""
+    if not uri:   # gone from the list: rebuild smb://[user@]server/share from the folder's name
+        kind_, _, spec = nm.partition(":")
+        kv = dict(part.partition("=")[::2] for part in spec.split(","))
+        if kind_ != "smb-share" or not kv.get("server") or not kv.get("share"):
+            return
+        uri = "smb://" + (kv["user"] + "@" if kv.get("user") else "") + kv["server"] + "/" + kv["share"]
+    exe = shutil.which("gio")
+    if exe:
+        try:
+            subprocess.run([exe, "mount", uri], stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+
 # ---- The Trash (freedesktop, shared with the file manager) -------------------------------------------
 # Things deleted from your home drive go to ~/.local/share/Trash; things deleted from another drive (a USB
 # stick, a second disk) go to a trash at the top of that drive, .Trash-<uid> or .Trash/<uid>, so they

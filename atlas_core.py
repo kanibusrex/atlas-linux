@@ -11,8 +11,10 @@ Every function that can take a while is given a State holding:
   events   a queue of progress messages for the window to pass on to the page
   cancel   set to True by the window to stop the work
   paused   set to True by the window to pause a copy
+  pace     how hard a copy to a network share may push it (PACES), set by the window from the settings
 """
 
+import errno
 import fnmatch
 import hashlib
 import os
@@ -22,6 +24,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 import zipfile
@@ -40,6 +43,8 @@ class State:
         self.files_total = 0
         self.current = ""
         self.phase = "waiting"
+        self.pace = "full"
+        self.note = ""
 
 
 def send_event(state, message):
@@ -452,6 +457,191 @@ def conflicts(sources, dest):
     return {"conflicts": [base_of(str(s)) for s in sources or [] if exists(join(dest, base_of(str(s))))]}
 
 
+# ---- Copies to a network share: paced, and picked up again when it drops --------------------------------
+# A share can be a USB stick in a router: a long copy at full speed heats the stick until the router
+# loses it. So a copy to a share can be paced (rests, a speed limit), is written through to the share as
+# it goes (so a rest really is a rest), and when the share drops it waits for it and carries on from the
+# last part known to be there, instead of failing.
+PACES = {   # pace: (bytes written before a rest, the rest in seconds, a speed limit in bytes a second or 0)
+    "full": (0, 0, 0),
+    "gentle": (512 << 20, 20, 0),
+    "gentlest": (256 << 20, 45, 6 << 20),
+}
+CHUNK = 1 << 20
+SYNC_EVERY = 32 << 20      # written through to the share this often, on a network share
+RECONNECT_FOR = 600        # seconds to wait for a share that has dropped
+COOL_AFTER_DROP = 30       # and a rest once it is back, before writing to it again
+TRIES = 8                  # times one file is picked up again before it counts as failed
+
+
+def _nap(state, secs, phase=None):
+    """Sleeps for a while, unless the copy is stopped. False when it was."""
+    if phase:
+        state.phase = phase
+    end = time.monotonic() + secs
+    while time.monotonic() < end:
+        if state.cancel:
+            return False
+        time.sleep(min(0.2, max(0.0, end - time.monotonic())))
+    if phase:
+        state.phase = "copying"
+    return True
+
+
+def _answers(path, wait=8.0):
+    """Can this folder be read? Asked in a thread: a share that has gone can hang a call for minutes."""
+    box = {}
+
+    def go():
+        try:
+            os.listdir(path)
+            box["ok"] = True
+        except OSError:
+            pass
+    th = threading.Thread(target=go, daemon=True)
+    th.start()
+    th.join(wait)
+    return bool(box.get("ok"))
+
+
+def _wait_back(folder, state, err):
+    """After a share dropped: waits (reconnecting now and then) until the folder can be read again."""
+    state.note = "The share dropped (%s). Waiting for it to come back..." % ((getattr(err, "strerror", None) or str(err)) or "no answer")
+    state.phase = "reconnecting"
+    reconnect = getattr(system, "reconnect", None)
+    start, n = time.monotonic(), 0
+    while time.monotonic() - start < RECONNECT_FOR:
+        if state.cancel:
+            return False
+        if n and not _nap(state, 5):
+            return False
+        if reconnect and n % 3 == 1:
+            try:
+                reconnect(folder)
+            except Exception:
+                pass
+        n += 1
+        if _answers(folder):
+            state.note = "The share came back. Letting it cool down before carrying on."
+            ok = _nap(state, COOL_AFTER_DROP if n > 1 else 3, "resting")
+            state.note = ""
+            return ok
+    state.note = ""
+    state.phase = "copying"
+    return False
+
+
+def _sync(f):
+    f.flush()
+    try:
+        os.fsync(f.fileno())
+    except OSError as e:
+        if e.errno not in (errno.EINVAL, errno.ENOSYS, errno.ENOTSUP):
+            raise
+
+
+class _Pacer:
+    """Rests and the speed limit for the copy's pace, counted over the whole copy (not per file)."""
+
+    def __init__(self, state, on):
+        self.state, self.on = state, on
+        self.since_rest = 0
+        self.t0, self.sent = time.monotonic(), 0
+
+    def wrote(self, n, sync):
+        if not self.on:
+            return True
+        every, rest, cap = PACES.get(self.state.pace, PACES["full"])
+        self.since_rest += n
+        self.sent += n
+        if cap:
+            ahead = self.sent / cap - (time.monotonic() - self.t0)
+            if ahead > 0 and not _nap(self.state, ahead):
+                return False
+        if every and self.since_rest >= every:
+            sync()
+            self.state.note = "Resting for %d s so the share can cool down." % rest
+            ok = _nap(self.state, rest, "resting")
+            self.state.note = ""
+            self.since_rest, self.t0, self.sent = 0, time.monotonic(), 0
+            return ok
+        return True
+
+
+def _same_block(frm, tmp, at):
+    """Do the source and the part copied so far hold the same bytes just before at?"""
+    try:
+        with open(frm, "rb") as a, open(tmp, "rb") as b:
+            a.seek(at - CHUNK)
+            b.seek(at - CHUNK)
+            return a.read(CHUNK) == b.read(CHUNK)
+    except OSError:
+        return False
+
+
+def _copy_file(frm, tmp, state, pacer, slow):
+    """Copies one file into tmp. On a share, a drop is waited out and the file picked up where it was.
+    True when copied, False when stopped; raises OSError when it could not be copied."""
+    done = good = 0          # bytes in tmp, and bytes known to be on the share (written through)
+    tries = 0
+    while True:
+        try:
+            with open(frm, "rb") as fin, open(tmp, "r+b" if done else "wb") as fout:
+                if done:
+                    fout.truncate(done)
+                    fout.seek(done)
+                    fin.seek(done)
+                unsynced = 0
+                while True:
+                    while state.paused and not state.cancel:
+                        time.sleep(0.15)
+                    if state.cancel:
+                        return False
+                    buf = fin.read(CHUNK)
+                    if not buf:
+                        break
+                    fout.write(buf)
+                    done += len(buf)
+                    unsynced += len(buf)
+                    state.bytes_done += len(buf)
+                    if slow and unsynced >= SYNC_EVERY:
+                        _sync(fout)
+                        good, unsynced = done, 0
+                    if not pacer.wrote(len(buf), lambda: _sync(fout)):
+                        return False
+                if slow:
+                    _sync(fout)
+            return True
+        except OSError as e:
+            tries += 1
+            if not slow or state.cancel or tries > TRIES:
+                raise
+            if not _wait_back(os.path.dirname(tmp), state, e):
+                if state.cancel:
+                    return False
+                raise
+            # carry on from the last part known to be there, if it really is the same as the source
+            try:
+                there = os.path.getsize(tmp)
+            except OSError:
+                there = 0
+            at = min(good, there) // CHUNK * CHUNK
+            if at and not _same_block(frm, tmp, at):
+                at = 0
+            state.bytes_done -= done - at
+            done = good = at
+
+
+def _again(fn, folder, state, slow):
+    """Does a small step (a folder made, a file put in place), waiting out a dropped share on the way."""
+    for n in range(TRIES + 1):
+        try:
+            return fn()
+        except OSError as e:
+            if not slow or n == TRIES or not _wait_back(folder, state, e):
+                raise
+
+
 def copy(sources, dest, move, policy, state, dests=None):
     """Copies (or moves) items into a folder, reporting progress in state as it goes. policy says what
     to do when a name is already there: "replace", "skip" or "keep" (the new one gets a free name).
@@ -548,6 +738,15 @@ def copy(sources, dest, move, policy, state, dests=None):
     state.bytes_total, state.files_total = total, count
     state.bytes_done, state.files_done = 0, 0
     state.phase = "copying"
+    slow_target = getattr(system, "slow_target", None)
+    slow = False
+    if slow_target:
+        for d in {os.path.abspath(str(x)) for x in (dests or [dest])}:
+            try:
+                slow = slow or bool(slow_target(d))
+            except Exception:
+                pass
+    pacer = _Pacer(state, slow)
 
     for a, b in quick:
         try:
@@ -561,7 +760,7 @@ def copy(sources, dest, move, policy, state, dests=None):
             break
         if kind_ == "dir":
             try:
-                os.makedirs(to, exist_ok=True)
+                _again(lambda: os.makedirs(to, exist_ok=True), os.path.dirname(to.rstrip(SEP)), state, slow)
             except OSError as e:
                 problems.append({"path": to, "error": e.strerror or str(e)})
             continue
@@ -593,17 +792,7 @@ def copy(sources, dest, move, policy, state, dests=None):
                 state.files_done += 1
                 state.bytes_done += size
                 continue
-            with open(frm, "rb") as fin, open(tmp, "wb") as fout:
-                while True:
-                    while state.paused and not state.cancel:
-                        time.sleep(0.15)
-                    if state.cancel:
-                        break
-                    buf = fin.read(1048576)
-                    if not buf:
-                        break
-                    fout.write(buf)
-                    state.bytes_done += len(buf)
+            _copy_file(frm, tmp, state, pacer, slow)
             if state.cancel:
                 try:
                     os.unlink(tmp)
@@ -614,7 +803,7 @@ def copy(sources, dest, move, policy, state, dests=None):
                 shutil.copymode(frm, tmp)
             except OSError:
                 pass
-            os.replace(tmp, to)
+            _again(lambda: os.replace(tmp, to), os.path.dirname(to), state, slow)
             try:
                 os.utime(to, (time.time(), mtime))
             except OSError:

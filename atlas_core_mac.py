@@ -52,6 +52,19 @@ def _mounts():
     return out
 
 
+_NET_FS = {"smbfs", "afpfs", "nfs", "webdav", "ftp", "osxfuse", "macfuse"}
+
+
+def slow_target(path):
+    """Is this folder on a network share? atlas_core.copy paces copies there."""
+    path = os.path.realpath(path)
+    best, fs = "", ""
+    for mnt, (_what, f) in _mounts().items():
+        if (path == mnt or path.startswith(mnt.rstrip("/") + "/")) and len(mnt) > len(best):
+            best, fs = mnt, f
+    return fs in _NET_FS
+
+
 def _statvfs(path, wait=2.0):
     """statvfs on a share asks the server; one that has gone away must not hold up the drive list."""
     box = {}

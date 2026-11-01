@@ -496,6 +496,11 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .pill.ok { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
 .pill.bad { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
 .pill.go { background: var(--accent-soft); color: var(--accent); }
+.pill.wait { background: color-mix(in srgb, var(--warn) 22%, transparent); color: var(--warn); }
+.cp-pace { display: flex; align-items: center; gap: 10px; padding: 10px 16px 0; font-size: 12.5px; color: var(--muted); }
+.cp-pace label { flex: none; }
+.cp-pace select { flex: 1; min-width: 0; height: 30px; padding: 0 30px 0 10px; border-radius: 7px; border: 1px solid var(--line); outline: 0; font-size: 12.5px; -webkit-appearance: none; appearance: none; background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 14px; }
+.cp-note { color: var(--text-2); font-size: 12px; margin-top: 6px; }
 .dr-empty { padding: 40px 20px; text-align: center; color: var(--muted); }
 
 .dragtip { position: fixed; z-index: 80; pointer-events: none; padding: 5px 10px; border-radius: 7px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
@@ -1007,6 +1012,11 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
 </div>
 <div class="drawer" id="copies" hidden>
   <div class="dr-h"><h3>Copies and moves</h3><button class="btn sm" id="cpClear">Clear finished</button><button class="ib" id="cpClose" title="Close"><svg class="ico" viewBox="0 0 24 24"><use href="#i-x"/></svg></button></div>
+  <div class="cp-pace" title="Copies to a network share can rest now and then, so a USB stick or small NAS doesn't overheat. If the share drops, Atlas waits for it and carries on."><label for="cpPace">To network shares</label><select id="cpPace">
+    <option value="full">Full speed</option>
+    <option value="gentle">Gentle: rest 20 s every 512 MB</option>
+    <option value="gentlest">Gentlest: 6 MB/s, rest 45 s every 256 MB</option>
+  </select></div>
   <div class="dr-b" id="cpList"></div>
 </div>
 <div class="toasts" id="toasts"></div>
@@ -2702,7 +2712,10 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
 
   /* ---- The copy queue ------------------------------------------------------------------------------ */
   var copyState = {}, copyList = [];
-  function showCopies() { $("copies").hidden = false; $("rCopies").classList.add("on"); }
+  function showCopies() {
+    $("copies").hidden = false; $("rCopies").classList.add("on");
+    api("copypace", {}).then(function (p) { if (p) { $("cpPace").value = p; } }).catch(function () { });
+  }
   function paintCopies(list) {
     copyList = list;
     var active = list.filter(function (c) { return c.status === "running" || c.status === "waiting"; }).length;
@@ -2729,7 +2742,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       var pct = c.bytesTotal ? Math.min(100, Math.round(c.bytesDone / c.bytesTotal * 100)) : (c.status === "done" ? 100 : 0);
       var speed = c.elapsed > 800 ? c.bytesDone / (c.elapsed / 1000) : 0;
       var left = speed > 0 && c.bytesTotal > c.bytesDone ? (c.bytesTotal - c.bytesDone) / speed : 0;
-      var pill = c.status === "running" ? (c.paused ? "<span class='pill'>Paused</span>" : "<span class='pill go'>" + (c.phase === "counting" ? "Counting" : pct + "%") + "</span>") :
+      var pill = c.status === "running" ? (c.paused ? "<span class='pill'>Paused</span>" : c.phase === "resting" ? "<span class='pill wait'>Cooling down</span>" : c.phase === "reconnecting" ? "<span class='pill wait'>Reconnecting</span>" : "<span class='pill go'>" + (c.phase === "counting" ? "Counting" : pct + "%") + "</span>") :
         c.status === "waiting" ? "<span class='pill'>Waiting</span>" : c.status === "done" ? "<span class='pill ok'>Done</span>" : c.status === "cancelled" ? "<span class='pill'>Stopped</span>" : "<span class='pill bad'>" + (c.status === "problems" ? "Problems" : "Failed") + "</span>";
       var probs = (c.result && c.result.problems) || [];
       return "<div class='cp" + (c.status === "done" ? " done" : (c.status === "problems" || c.status === "failed") ? " bad" : "") + "'>" +
@@ -2741,6 +2754,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
         "<div class='cp-n'><span>" + (c.filesTotal ? c.filesDone + " of " + plural(c.filesTotal, "file") : "") + (c.bytesTotal ? " \u00B7 " + fmtSize(c.bytesDone) + " of " + fmtSize(c.bytesTotal) : "") + "</span><span>" +
         (c.status === "running" && speed ? fmtSize(speed) + "/s" + (left ? ", " + fmtLeft(left) + " left" : "") : c.elapsed && c.status !== "waiting" && c.status !== "running" ? "took " + fmtLeft(c.elapsed / 1000) : "") + "</span></div>" +
         (c.status === "running" && c.current ? "<div class='cp-s'>" + esc(baseName(c.current)) + "</div>" : "") +
+        (c.status === "running" && c.note ? "<div class='cp-note'>" + esc(c.note) + "</div>" : "") +
         (probs.length ? "<div class='cp-p'>" + probs.slice(0, 20).map(function (pr) { return esc(baseName(pr.path)) + ": " + esc(pr.error); }).join("<br>") + (probs.length > 20 ? "<br>and " + (probs.length - 20) + " more" : "") + "</div>" : "") +
         (c.error ? "<div class='cp-p'>" + esc(c.error) + "</div>" : "") + "</div>";
     }).join("");
@@ -4547,6 +4561,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   $("rCopies").onclick = function () { if ($("copies").hidden) { showCopies(); paintCopies(copyList); } else { $("copies").hidden = true; $("rCopies").classList.remove("on"); } };
   $("cpClose").onclick = function () { $("copies").hidden = true; $("rCopies").classList.remove("on"); };
   $("cpClear").onclick = function () { api("copyctl", { action: "clear" }).catch(fail); };
+  $("cpPace").addEventListener("change", function (ev) { api("copypace", { pace: ev.target.value }).then(function (p) { toast("Copies to network shares: " + ({ full: "full speed", gentle: "gentle", gentlest: "gentlest" })[p] + ".", { good: true }); }).catch(fail); });
   $("cpList").addEventListener("click", function (ev) { var b = ev.target.closest("[data-cc]"); if (b) { api("copyctl", { copy: +b.getAttribute("data-cc"), action: b.getAttribute("data-act") }).catch(fail); } });
   $("rPalette").onclick = palette;
   $("rTheme").onclick = function () { themeMenu($("rTheme")); };

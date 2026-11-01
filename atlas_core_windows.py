@@ -194,6 +194,14 @@ class SHFILEOPSTRUCTW(ctypes.Structure):
                 ("lpszProgressTitle", wintypes.LPCWSTR)]
 
 
+def slow_target(path):
+    """Is this folder on a network share (a \\\\server\\share path or a mapped drive)? atlas_core.copy paces copies there."""
+    if path.startswith("\\\\"):
+        return True
+    root = os.path.splitdrive(os.path.abspath(path))[0] + "\\"
+    return k32.GetDriveTypeW(root) == 4
+
+
 def recyclable(path):
     """Only fixed and removable drives have a Recycle Bin; network shares don't."""
     if path.startswith("\\\\"):

@@ -58,7 +58,7 @@ else:
 
 import webview  # noqa: E402
 
-VERSION = "1.2.6"
+VERSION = "1.2.7"
 DATA_DIR = desktop.DATA_DIR
 PAGE = os.path.join(HERE, "atlas.html")
 BG = "#1a1b1e"
@@ -158,7 +158,7 @@ class Copy:
             elapsed = int(((self.ended or time.monotonic()) - self.started) * 1000)
         return {"id": self.id, "label": self.label, "dest": self.args["dest"], "move": self.args["move"], "status": self.status,
                 "paused": bool(s.paused), "phase": s.phase, "bytesDone": s.bytes_done, "bytesTotal": s.bytes_total,
-                "filesDone": s.files_done, "filesTotal": s.files_total, "current": s.current, "elapsed": elapsed,
+                "filesDone": s.files_done, "filesTotal": s.files_total, "current": s.current, "elapsed": elapsed, "note": s.note,
                 "result": self.result, "error": self.error}
 
 
@@ -207,7 +207,7 @@ class Host:
         os.makedirs(DATA_DIR, exist_ok=True)
         self.prefs_path = os.path.join(DATA_DIR, "atlas.json")
         # UpdateCheck: look for a new version on GitHub (at most daily); UpdateLast, when it last did; UpdateSkip, one not wanted
-        self.prefs = {"W": 1360, "H": 860, "Max": False, "Dark": True, "Zoom": 1.15, "UpdateCheck": True, "UpdateLast": 0, "UpdateSkip": ""}
+        self.prefs = {"W": 1360, "H": 860, "Max": False, "Dark": True, "Zoom": 1.15, "CopyPace": "gentle", "UpdateCheck": True, "UpdateLast": 0, "UpdateSkip": ""}
         try:
             with open(self.prefs_path) as f:
                 self.prefs.update(json.load(f))
@@ -337,10 +337,20 @@ class Host:
             return self.reply(rid, error="Use the preview pane for an item's details.")
         if op == "copy":
             self.copy_seq += 1
-            self.copies.append(Copy(self.copy_seq, m))
+            c = Copy(self.copy_seq, m)
+            c.state.pace = self.copy_pace()
+            self.copies.append(c)
             self.start_next_copy()
             self.send_copies(True)
             return self.reply(rid, {"copy": self.copy_seq})
+        if op == "copypace":
+            # how hard copies to a network share push it (atlas_core.PACES); running copies follow at once
+            pace = str(m.get("pace") or "")
+            if pace in core.PACES:
+                self.prefs["CopyPace"] = pace
+                for c in self.copies:
+                    c.state.pace = pace
+            return self.reply(rid, self.copy_pace())
         if op == "copyctl":
             c = next((x for x in self.copies if x.id == int(m.get("copy") or 0)), None)
             act = str(m.get("action") or "")
@@ -483,6 +493,10 @@ class Host:
         self.desktop.call_main(self.window.destroy)
 
     # ---- The copy queue: one copy or move at a time, in order -----------------------------------------
+    def copy_pace(self):
+        pace = str(self.prefs.get("CopyPace") or "gentle")
+        return pace if pace in core.PACES else "gentle"
+
     def start_next_copy(self):
         if any(c.status == "running" for c in self.copies):
             return
