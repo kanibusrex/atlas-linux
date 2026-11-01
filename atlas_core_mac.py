@@ -8,6 +8,7 @@ atlas_core_windows.py give the same names.
 Like atlas_core.py, no windows here, only files: everything can run in a background thread.
 """
 
+import errno
 import os
 import pwd
 import re
@@ -286,6 +287,15 @@ def cloud_places():
 def online_only(_path, st):
     # SF_DATALESS: an iCloud, OneDrive or Google file whose contents are still in the cloud
     return bool(getattr(st, "st_flags", 0) & 0x40000000)
+
+
+def kept_private(p, e):
+    """Not the folder's own permissions: macOS itself keeps some places (Time Machine backups, Mail...) from apps
+    until they are given Full Disk Access. It says "not permitted" for those, where a locked folder says "denied"."""
+    if e.errno != errno.EPERM:
+        return None
+    return {"path": p, "fullDisk": True, "error": "macOS is keeping this folder private from Atlas. Time Machine backups are like this. "
+            "To open them, add Atlas under Full Disk Access in System Settings, then quit Atlas and open it again."}
 
 
 def is_hidden(name, st):

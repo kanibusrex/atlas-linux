@@ -263,6 +263,9 @@ class Desktop(Worker):
             reply(rid, True)
         elif op == "savetext":
             reply(rid, self.ui(lambda: self.save_text(str(m.get("name") or "export.csv"), str(m.get("text") or ""))))
+        elif op == "fulldisk":
+            subprocess.Popen(["/usr/bin/open", "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"])
+            reply(rid, True)
         elif op == "url":
             u = str(m.get("url") or "")
             if u.startswith("https://"):

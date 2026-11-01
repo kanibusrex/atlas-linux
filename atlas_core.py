@@ -197,8 +197,9 @@ def list_dir(path):
                 pass
         par = "" if os.path.dirname(full) == full else os.path.dirname(full)
         return system.listing(full, {"path": full, "parent": par, "entries": entries, "long": False})
-    except PermissionError:
-        return {"path": p, "error": "You do not have permission to open this folder."}
+    except PermissionError as e:
+        kept_private = getattr(system, "kept_private", None)
+        return (kept_private and kept_private(p, e)) or {"path": p, "error": "You do not have permission to open this folder."}
     except OSError as e:
         return {"path": p, "error": e.strerror or str(e)}
 

@@ -46,6 +46,14 @@ except (OSError, ValueError):
 page.update(pvPos="right", preview=True)
 json.dump(page, open(sys.argv[1], "w"))
 PY
+# somewhere macOS keeps private from apps, as it does Time Machine backups: the picture should say what to do
+"$APP" "$HOME/Library/Safari" &
+atlas=$!
+sleep 15
+screencapture -x try/4-kept-private.png
+kill $atlas 2>/dev/null
+sleep 3
+
 for name in sample.pdf sample.docx; do
   before=$(grep -c "The page is up" "$ATLAS_LOG")
   "$APP" "$PWD/try/samples/$name" &

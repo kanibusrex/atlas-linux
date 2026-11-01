@@ -1653,7 +1653,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       clearTimeout(slow);
       if (t.ticket !== ticket) { return; }
       t.loading = false;
-      if (r.error) { t.error = r.error; t.entries = []; }
+      if (r.error) { t.error = r.error; t.fullDisk = !!r.fullDisk; t.entries = []; }
       else {
         t.entries = r.entries || [];
         t.isShares = !!r.shares;
@@ -2119,7 +2119,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     }
     if (t.error) {
       spacer.style.height = "0px"; spacer.innerHTML = "";
-      list.insertAdjacentHTML("beforeend", "<div class='empty err'><div class='box'><div class='big'>" + svg("alert") + "</div><h3>This folder could not be opened</h3><p>" + esc(t.error) + "</p>" +
+      list.insertAdjacentHTML("beforeend", "<div class='empty err'><div class='box'><div class='big'>" + svg("alert") + "</div><h3>This folder could not be opened</h3><p>" + esc(t.error) + "</p>" + (t.fullDisk ? "<p><button class='btn pri' data-fulldisk>" + svg("open") + "Open Full Disk Access settings</button></p>" : "") +
         "<button class='btn' data-retry>Try again</button> <button class='btn' data-winexp>" + (LINUX ? "Open in the file manager" : "Open in Windows Explorer") + "</button></div></div>");
       return;
     }
@@ -4294,6 +4294,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       var sp = ev.target.closest("[data-sp]");
       if (sp) { openSpace(t, sp.getAttribute("data-sp")); return; }
       if (ev.target.closest("[data-retry]")) { refresh(t); return; }
+      if (ev.target.closest("[data-fulldisk]")) { api("fulldisk").catch(fail); return; }
       if (ev.target.closest("[data-addsrv]")) { addServer(); return; } if (ev.target.closest("[data-mapdrive]")) { mapDrive(); return; } if (ev.target.closest("[data-smb]")) { connectShare(); return; } var vb = ev.target.closest("[data-vol]"); if (vb) { mountVol(vb.getAttribute("data-vol")); return; }
       if (ev.target.closest("[data-winexp]")) { api("explorer", { path: t.path }).catch(fail); }
     });

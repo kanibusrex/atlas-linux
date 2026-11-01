@@ -143,6 +143,11 @@ try:
         os.environ["OneDrive"] = od
         got = run("drives").get("clouds", [])
         check("OneDrive is found", any(c["service"] == "onedrive" and c["path"] == od for c in got), got)
+    if sys.platform == "darwin":
+        import errno
+        kept = core.system.kept_private("/Volumes/Backups", PermissionError(errno.EPERM, "Operation not permitted"))
+        check("a folder macOS keeps private says how to open it", bool(kept and kept.get("fullDisk")), kept)
+        check("a locked folder is just a locked folder", core.system.kept_private("/x", PermissionError(errno.EACCES, "Permission denied")) is None)
     if sys.platform in ("darwin", "win32"):
         check("an online-only file is marked", core.system.online_only("x", Marks) is True)
         check("a file on this computer isn't", core.system.online_only("x", os.stat(__file__)) is False, os.stat(__file__))
