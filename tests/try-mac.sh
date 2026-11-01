@@ -47,18 +47,13 @@ page.update(pvPos="right", preview=True)
 json.dump(page, open(sys.argv[1], "w"))
 PY
 for name in sample.pdf sample.docx; do
+  before=$(grep -c "The page is up" "$ATLAS_LOG")
   "$APP" "$PWD/try/samples/$name" &
   atlas=$!
-  sleep 12
-  # what a first run shows on some machines is macOS asking about the local network: answer it, and say where Atlas was
-  /usr/bin/sample $atlas 2 -file "try/stuck-$name.txt" >/dev/null 2>&1
-  osascript -e 'tell application "System Events" to get name of every process whose background only is false' 2>&1 | tee -a try/processes.txt
-  for who in UserNotificationCenter CoreServicesUIAgent; do
-    osascript -e 'tell application "System Events" to tell process "'"$who"'" to click button "Allow" of window 1' 2>&1 | tee -a try/processes.txt
-  done
-  sleep 15
+  sleep 20
   screencapture -x "try/3-$name.png"
   kill -0 $atlas 2>/dev/null || fail "Atlas closed by itself previewing $name."
+  [ "$(grep -c "The page is up" "$ATLAS_LOG")" -gt "$before" ] || fail "Atlas never opened its page with $name."
   kill $atlas
   sleep 3
 done

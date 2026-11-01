@@ -25,6 +25,7 @@ import queue
 import re
 import secrets
 import shutil
+import socketserver
 import sys
 import threading
 import time
@@ -684,6 +685,12 @@ class Resources(http.server.ThreadingHTTPServer):
     def __init__(self, host):
         self.host = host
         super().__init__(("127.0.0.1", 0), Handler)
+
+    def server_bind(self):
+        # HTTPServer's own also looks up this computer's name for the address, which Atlas never uses. On a Mac that
+        # goes out on the local network: Atlas sat waiting for it with no window, and macOS asked about local devices.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
