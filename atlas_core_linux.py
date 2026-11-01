@@ -15,6 +15,7 @@ import threading
 import time
 import urllib.parse
 
+import atlas_cloud
 import atlas_core as core
 
 
@@ -34,7 +35,8 @@ def user_dir(key):
     return os.path.join(home, defaults.get(key, key.title()))
 
 # ---- Drives and the usual places ----------------------------------------------------------------
-_NET_FS = {"cifs", "smb3", "smbfs", "nfs", "nfs4", "sshfs", "fuse.sshfs", "fuse.rclone", "davfs", "fuse.davfs2", "9p"}
+# (rclone's mounts are in cloud_places, and have their own cache: no need to pace copies to them)
+_NET_FS = {"cifs", "smb3", "smbfs", "nfs", "nfs4", "sshfs", "fuse.sshfs", "davfs", "fuse.davfs2", "9p"}
 _REAL_FS = {"ext2", "ext3", "ext4", "btrfs", "xfs", "f2fs", "vfat", "exfat", "ntfs", "ntfs3", "fuseblk", "zfs", "iso9660", "udf", "jfs", "reiserfs", "bcachefs"}
 
 
@@ -100,7 +102,32 @@ def drives():
         os.makedirs(os.path.join(trash_dir(), "info"), exist_ok=True)
     except OSError:
         pass
-    return {"drives": out, "places": places, "trash": {"path": trash_files(), "count": trash_count()}, "user": pwd.getpwuid(os.getuid()).pw_name, "machine": os.uname().nodename}
+    return {"drives": out, "clouds": cloud_places(), "places": places, "trash": {"path": trash_files(), "count": trash_count()}, "user": pwd.getpwuid(os.getuid()).pw_name, "machine": os.uname().nodename}
+
+
+# ---- Cloud accounts (atlas_cloud.py), and any other rclone mounts there are --------------------------------
+def cloud_places():
+    now = atlas_cloud.mounts()
+    out = []
+    for acct in atlas_cloud.accounts():
+        path = os.path.join(atlas_cloud.MOUNTS, acct["name"])
+        info = {"path": path, "label": acct["name"], "service": acct.get("service", ""), "own": True, "mounted": path in now,
+                "ready": False, "total": 0, "free": 0, "problem": atlas_cloud.problem(acct["name"])}
+        sv = _statvfs(path) if path in now else None
+        if sv:
+            info["ready"] = True
+            info["total"] = sv.f_blocks * sv.f_frsize
+            info["free"] = sv.f_bavail * sv.f_frsize
+        out.append(info)
+    known = {x["path"] for x in out}
+    for path, src in now.items():
+        if path not in known:
+            out.append({"path": path, "label": os.path.basename(path) or src, "service": "", "own": False, "mounted": True, "ready": True, "total": 0, "free": 0})
+    return out
+
+
+def online_only(path, st):
+    return atlas_cloud.online_only(path, st)
 
 
 # ---- Network shares (SMB, through GVFS, as you: no root, no fstab) ---------------------------------
@@ -421,6 +448,8 @@ def trash_empty(state):
 
 
 def trash(p):
+    if atlas_cloud.on_mount(p):
+        return core.remove_tree(p)     # a Trash folder there would be uploaded; the service keeps its own
     from gi.repository import Gio
     Gio.File.new_for_path(p).trash(None)
 
@@ -609,6 +638,11 @@ OPS = {
     "inuse": lambda a, state: in_use(a.get("paths")),
     "endprogram": lambda a, state: end_program(a.get("pid")),
     "wallpaper": lambda a, state: set_wallpaper(str(a.get("path") or "")),
+    "cloudinfo": lambda a, state: atlas_cloud.info(),
+    "cloudconnect": lambda a, state: atlas_cloud.connect(a, state),
+    "cloudabandon": lambda a, state: atlas_cloud.abandon(str(a.get("name") or "")),
+    "cloudmount": lambda a, state: {"problem": atlas_cloud.mount(str(a.get("name") or ""))},
+    "clouddisconnect": lambda a, state: atlas_cloud.disconnect(str(a.get("name") or ""), bool(a.get("force"))),
 }
 
 # the Windows Atlas's own: mapped drives, shares a PC offers, and who has access (Active Directory)

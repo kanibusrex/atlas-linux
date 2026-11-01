@@ -122,6 +122,33 @@ try:
         shown = next((e["s"] for e in r.get("entries", []) if e["n"] == "Calculator.app"), 0)
         check("an app's size is everything in it", counted > 1000000 and abs(shown - counted) <= counted // 20, {"shown": shown, "counted": counted})
 
+    # cloud folders the services' apps have made are found, and a file still in the cloud is marked
+    class Marks:
+        st_file_attributes = 0x400000   # Windows: recall on data access
+        st_flags = 0x40000000           # macOS: dataless
+    if sys.platform == "darwin":
+        # in a pretend home: never the real folders of whoever runs this
+        real_home = os.environ["HOME"]
+        os.environ["HOME"] = os.path.join(box, "pretend-home")
+        spot = os.path.expanduser("~/Library/CloudStorage")
+        made = [os.path.join(spot, "OneDrive-Personal"), os.path.join(spot, "GoogleDrive-someone@example.com", "My Drive"), os.path.join(spot, "Dropbox")]
+        for m in made:
+            os.makedirs(m, exist_ok=True)
+        got = {c["label"]: c["path"] for c in run("drives").get("clouds", [])}
+        check("OneDrive, Google Drive and Dropbox are found", got.get("OneDrive") == made[0] and got.get("Google Drive") == made[1] and got.get("Dropbox") == made[2], got)
+        os.environ["HOME"] = real_home
+    if sys.platform == "win32":
+        od = os.path.join(box, "OneDrive")
+        os.makedirs(od)
+        os.environ["OneDrive"] = od
+        got = run("drives").get("clouds", [])
+        check("OneDrive is found", any(c["service"] == "onedrive" and c["path"] == od for c in got), got)
+    if sys.platform in ("darwin", "win32"):
+        check("an online-only file is marked", core.system.online_only("x", Marks) is True)
+        check("a file on this computer isn't", core.system.online_only("x", os.stat(__file__)) is False, os.stat(__file__))
+    if sys.platform.startswith("linux"):
+        check("the drive list has its clouds", isinstance(run("drives").get("clouds"), list))
+
     if sys.platform == "win32":
         r = run("list", path=top[:2])
         check("C: is read as C:\\", r.get("path", "").endswith(":\\") and not r.get("error"), r)

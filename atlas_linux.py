@@ -170,6 +170,8 @@ class Desktop:
                              lambda conn, _n: self.register(conn, ATLAS_XML, ATLAS_PATH, self.on_atlas_call), None, None)
             Gio.bus_own_name(Gio.BusType.SESSION, "org.freedesktop.FileManager1", Gio.BusNameOwnerFlags.NONE,
                              lambda conn, _n: self.register(conn, FM1_XML, "/org/freedesktop/FileManager1", self.on_fm1), None, None)
+            # cloud accounts come back as their folders, in the background: one that's offline mustn't hold anything up
+            threading.Thread(target=self.mount_clouds, daemon=True).start()
         self.omarchy_mon = self.font_mon = None
         try:
             self.omarchy_mon = Gio.File.new_for_path(OMARCHY_STATE).monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES, None)
@@ -188,6 +190,12 @@ class Desktop:
         for sig in ("volume-added", "volume-removed", "volume-changed", "mount-added", "mount-removed"):
             self.vmon.connect(sig, self.on_volumes)
         Gtk.Settings.get_default().props.gtk_application_prefer_dark_theme = bool(self.host.prefs.get("Dark", True))
+
+    def mount_clouds(self):
+        import atlas_cloud
+        if atlas_cloud.accounts():
+            atlas_cloud.mount_all()
+            self.call_main(self.send_volumes)
 
     def attach(self, window):
         """The window pywebview has just made (on GTK's thread, before it is shown): the parts it leaves as they are."""
@@ -331,7 +339,8 @@ class Desktop:
             self.save_text(rid, str(m.get("name") or "export.csv"), str(m.get("text") or ""))
         elif op == "url":
             u = str(m.get("url") or "")
-            if u.startswith("https://"):
+            # (rclone's sign-in page starts at a little server of its own, on this computer)
+            if u.startswith(("https://", "http://127.0.0.1:53682/")):
                 Gio.AppInfo.launch_default_for_uri(u, None)
             reply(rid, True)
         elif op == "omarchy":

@@ -120,7 +120,11 @@ def to_entry(name, full, st_l=None):
     c = 0
     if st:
         c = epoch_ms(getattr(st, "st_birthtime", 0) or st.st_ctime)
-    return {"n": name, "d": is_dir, "s": 0 if is_dir or not st else st.st_size, "m": m, "c": c, "a": flags}
+    out = {"n": name, "d": is_dir, "s": 0 if is_dir or not st else st.st_size, "m": m, "c": c, "a": flags}
+    # in the cloud, not yet on this computer: looking inside it would download it
+    if st and not is_dir and not link and system.online_only(full, st):
+        out["cl"] = 1
+    return out
 
 
 def entry_of(de):

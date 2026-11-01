@@ -124,7 +124,7 @@ def drives():
         if os.path.isdir(p):
             places.append({"name": name, "path": p})
     # Atlas doesn't show the Trash as a folder on macOS: Finder keeps where each thing came from to itself
-    return {"drives": out, "places": places, "trash": {"path": "", "count": 0}, "user": pwd.getpwuid(os.getuid()).pw_name,
+    return {"drives": out, "clouds": cloud_places(), "places": places, "trash": {"path": "", "count": 0}, "user": pwd.getpwuid(os.getuid()).pw_name,
             "machine": os.uname().nodename.split(".")[0]}
 
 
@@ -253,6 +253,41 @@ def set_wallpaper(path):
 
 
 # ---- What atlas_core.py asks of every system --------------------------------------------------------
+# ---- Cloud folders: the ones the services' own apps make ----------------------------------------------------
+def cloud_places():
+    home = os.path.expanduser("~")
+    out = []
+    icloud = os.path.join(home, "Library", "Mobile Documents", "com~apple~CloudDocs")
+    try:
+        if os.path.isdir(icloud):
+            out.append({"path": icloud, "label": "iCloud Drive", "service": "iclouddrive", "own": False, "mounted": True, "ready": True, "total": 0, "free": 0})
+    except OSError:
+        pass
+    top = os.path.join(home, "Library", "CloudStorage")
+    try:
+        names = sorted(os.listdir(top))
+    except OSError:
+        names = []
+    for n in names:
+        path = os.path.join(top, n)
+        if n.startswith(".") or not os.path.isdir(path):
+            continue
+        maker, _, who = n.partition("-")
+        service, label = {"OneDrive": ("onedrive", "OneDrive"), "GoogleDrive": ("drive", "Google Drive"), "Dropbox": ("dropbox", "Dropbox"), "Box": ("box", "Box")}.get(maker, ("", maker))
+        if service == "drive" and os.path.isdir(os.path.join(path, "My Drive")):
+            path = os.path.join(path, "My Drive")
+        # OneDrive-Personal is just OneDrive; OneDrive-Contoso says whose
+        if who and who not in ("Personal", "Box") and service != "drive":
+            label += " - " + who
+        out.append({"path": path, "label": label, "service": service, "own": False, "mounted": True, "ready": True, "total": 0, "free": 0, "who": who if service == "drive" else ""})
+    return out
+
+
+def online_only(_path, st):
+    # SF_DATALESS: an iCloud, OneDrive or Google file whose contents are still in the cloud
+    return bool(getattr(st, "st_flags", 0) & 0x40000000)
+
+
 def is_hidden(name, st):
     return name.startswith(".") or bool(getattr(st, "st_flags", 0) & stat.UF_HIDDEN)
 

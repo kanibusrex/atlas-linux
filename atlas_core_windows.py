@@ -128,11 +128,71 @@ def drives():
     home = os.path.expanduser("~")
     places = []
     for name, p in (("Desktop", user_dir("DESKTOP")), ("Documents", user_dir("DOCUMENTS")), ("Downloads", user_dir("DOWNLOAD")),
-                    ("Pictures", user_dir("PICTURES")), ("Home", home),
-                    ("OneDrive", os.environ.get("OneDriveCommercial") or os.environ.get("OneDrive") or "")):
+                    ("Pictures", user_dir("PICTURES")), ("Home", home)):
         if p and os.path.isdir(p):
             places.append({"name": name, "path": p})
-    return {"drives": out, "places": places, "user": os.environ.get("USERNAME", ""), "machine": os.environ.get("COMPUTERNAME", "")}
+    return {"drives": out, "clouds": cloud_places(out), "places": places, "user": os.environ.get("USERNAME", ""), "machine": os.environ.get("COMPUTERNAME", "")}
+
+
+# ---- Cloud folders: the ones the services' own apps make ----------------------------------------------------
+def _onedrive_folders():
+    found = []
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\OneDrive\Accounts") as top:
+            for i in range(winreg.QueryInfoKey(top)[0]):
+                with winreg.OpenKey(top, winreg.EnumKey(top, i)) as acct:
+                    try:
+                        folder = winreg.QueryValueEx(acct, "UserFolder")[0]
+                    except OSError:
+                        continue
+                    try:
+                        org = winreg.QueryValueEx(acct, "DisplayName")[0]
+                    except OSError:
+                        org = ""
+                    found.append((folder, "OneDrive - " + org if org else "OneDrive"))
+    except OSError:
+        pass
+    for var in ("OneDriveCommercial", "OneDriveConsumer", "OneDrive"):
+        if os.environ.get(var):
+            found.append((os.environ[var], "OneDrive"))
+    return found
+
+
+def cloud_places(drive_list=()):
+    home = os.path.expanduser("~")
+    spots = [(p, label, "onedrive") for p, label in _onedrive_folders()]
+    # Google Drive for Desktop: a drive letter of its own, or a folder in your home
+    for d in drive_list:
+        if d.get("label") == "Google Drive":
+            spots.append((os.path.join(d["path"], "My Drive"), "Google Drive", "drive"))
+            spots.append((d["path"], "Google Drive", "drive"))
+    spots += [(os.path.join(home, "My Drive"), "Google Drive", "drive"), (os.path.join(home, "Google Drive"), "Google Drive", "drive"),
+              (os.path.join(home, "iCloudDrive"), "iCloud Drive", "iclouddrive"), (os.path.join(home, "Box"), "Box", "box")]
+    # Dropbox says where it is
+    for base in (os.environ.get("LOCALAPPDATA"), os.environ.get("APPDATA")):
+        try:
+            with open(os.path.join(base or "", "Dropbox", "info.json"), encoding="utf-8") as f:
+                info = json.load(f)
+            for kind_, label in (("personal", "Dropbox"), ("business", "Dropbox (work)")):
+                if (info.get(kind_) or {}).get("path"):
+                    spots.append((info[kind_]["path"], label, "dropbox"))
+        except (OSError, ValueError):
+            pass
+    out, seen, services = [], set(), set()
+    for path, label, service in spots:
+        key = os.path.normcase(os.path.normpath(path))
+        # a Google drive letter counts once, as its My Drive when it has one
+        if key in seen or (service == "drive" and "drive" in services) or not os.path.isdir(path):
+            continue
+        seen.add(key)
+        services.add(service)
+        out.append({"path": os.path.normpath(path), "label": label, "service": service, "own": False, "mounted": True, "ready": True, "total": 0, "free": 0})
+    return out
+
+
+def online_only(_path, st):
+    # OneDrive's and Google's "online-only" files: reading one downloads it (recall on open or on data access, or offline)
+    return bool(getattr(st, "st_file_attributes", 0) & (0x40000 | 0x400000 | 0x1000))
 
 
 # ---- A folder's contents: Windows' own ways of writing a path ------------------------------------------

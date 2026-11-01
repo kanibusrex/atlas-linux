@@ -397,6 +397,10 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .pv-facts { padding: 4px 12px 14px; display: grid; grid-template-columns: 78px 1fr; gap: 5px 10px; font-size: 12px; }
 .pv-facts dt { color: var(--muted); }
 .pv-facts dd { margin: 0; color: var(--text-2); word-break: break-all; user-select: text; }
+.pv-online { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 16px; color: var(--muted); font-size: 12.5px; }
+.pv-online > .ico { width: 34px; height: 34px; }
+.row .onl { flex: none; margin-left: 6px; color: var(--muted); display: inline-grid; }
+.row .onl .ico { width: 13px; height: 13px; }
 .pv-none { padding: 40px 20px; text-align: center; color: var(--muted); }
 .pv-grip { display: none; }
 /* on the right: half the window by default (drag its edge), with a document taking all the height it can */
@@ -1337,7 +1341,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (k === "folder") { return "<span class='fi'>" + (e.a === "share" ? "<svg class='ico' viewBox='0 0 24 24' style='color:var(--muted)'><use href='#i-net'/></svg>" : folderSvg()) + "</span>"; }
     if (nativeIcons) {
       // a file with an icon of its own (a program's, an app's) asks for that one; the rest, their kind's
-      var x = extOf(e.n), own = W.__atlasSystem === "mac" ? x === ".app" : !LINUX && /^\.(exe|lnk|ico|url|msi)$/.test(x);
+      var x = extOf(e.n), own = !e.cl && (W.__atlasSystem === "mac" ? x === ".app" : !LINUX && /^\.(exe|lnk|ico|url|msi)$/.test(x));
       if (themedIcons && !own) { return "<span class='fi'>" + fileSvg(k) + "</span>"; }
       var src = RES + "icon?" + (own ? "p=" + encodeURIComponent(full) : "e=" + encodeURIComponent(x || ".file")) + (large ? "&s=l" : "");
       return "<span class='fi' data-k='" + k + "'><img alt='' src='" + esc(src) + "' onerror='window.__fdIconFail(this)'></span>";
@@ -1499,7 +1503,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
      Panes and tabs
      ================================================================================================ */
   var panes = [], activePane = 0, tabSeq = 0;
-  var drives = [], places = [], whoAmI = {}, trashBin = { path: "", count: 0 };
+  var drives = [], clouds = [], places = [], whoAmI = {}, trashBin = { path: "", count: 0 };
   function newTabState(path) {
     tabSeq += 1;
     return { id: tabSeq, path: path || "", hist: [path || ""], hi: 0, view: "details", sort: { key: "name", dir: 1 },
@@ -2159,7 +2163,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var cls = "row cols" + (t.mode === "search" || bin ? " srch" : "") + (t.sel.has(e.p) ? " sel" : "") + (n === t.focus ? " focus" : "") + (cutSet.has(e.p) ? " cut" : "");
     var sz = e.d ? (t.sizes[e.p] != null ? fmtSize(t.sizes[e.p]) : (t.sizesBusy && t.sizesBusy[e.p] ? "\u2026" : "")) : fmtSize(e.s);
     return "<div class='" + cls + "' data-i='" + n + "' style='position:absolute;left:0;right:0;top:" + y + "px' draggable='true'>" +
-      "<div class='nm'>" + iconHtml(e, e.p) + "<span class='" + (isHidden(e) ? "hid" : "") + "'>" + esc(e.n) + "</span></div>" +
+      "<div class='nm'>" + iconHtml(e, e.p) + "<span class='" + (isHidden(e) ? "hid" : "") + "'>" + esc(e.n) + "</span>" + (e.cl ? "<span class='onl' title='Stored online: downloads when you open it'>" + svg("cloud") + "</span>" : "") + "</div>" +
       (t.mode === "search" ? "<div class='dim' title='" + esc(parentOf(e.p)) + "'>" + esc(shortFolder(t, e.p)) + "</div>" : "") +
       (bin ? "<div class='dim' title='" + esc(e.o || "") + "'>" + esc(e.o ? parentOf(e.o) : "Unknown") + "</div>" : "") +
       extCell(e) + "<div class='ca'>" + ageChip(e.m) + "</div>" +
@@ -2198,7 +2202,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var k = kindOf(e);
     var pic = k === "image" && host && e.s < 25 * 1048576 && extOf(e.n) !== ".heic";
     // on Linux, photos, videos and PDFs show a small picture made in the background (and kept)
-    var thumb = LINUX && host && !inZip(t) && (pic || k === "video" || k === "pdf");
+    var thumb = LINUX && host && !inZip(t) && !e.cl && (pic || k === "video" || k === "pdf");
     var th = thumb ? "<img class='pic' loading='lazy' alt='' src='" + esc(thumbUrl(e.p, 256)) + "' onerror='this.replaceWith(document.createTextNode(\"\"))'>" :
       pic ? "<img class='pic' loading='lazy' alt='' src='" + esc(fileUrl(e.p)) + "' onerror='this.replaceWith(document.createTextNode(\"\"))'>" : iconHtml(e, e.p, true);
     return "<div class='tile" + (t.sel.has(e.p) ? " sel" : "") + (n === t.focus ? " focus" : "") + (cutSet.has(e.p) ? " cut" : "") + "' data-i='" + n + "' draggable='true' title='" + esc(e.n) + "' " +
@@ -2322,6 +2326,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       var ph = card("", places.map(function (pl) { return item(pl.path, pl.name, "", PLACEICON[pl.name] || "folder"); }).join(""));
       if (S.favs.length) { ph += card("Favourites", S.favs.map(function (f) { return item(f, baseName(f), "", "starf"); }).join("")); }
       ph += card("Drives", drives.map(function (d) { return item(d.path, driveName(d), "", d.type === "Network" ? "net" : "drive"); }).join(""));
+      if (clouds.length) { ph += card("Cloud", clouds.filter(function (c) { return c.mounted; }).map(function (c) { return item(c.path, c.label, "", "cloud"); }).join("")); }
       $("sidePin").innerHTML = "";
       $("sideScroll").innerHTML = ph;
       return;
@@ -2340,6 +2345,13 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     $("sidePin").innerHTML = pin;
     var html = card("", item("", "This PC", "", "pc") + places.map(function (pl) { return item(pl.path, pl.name, "", PLACEICON[pl.name] || "folder"); }).join("") +
       (LINUX && trashBin.path ? item(trashBin.path, "Trash", trashBin.count ? esc(plural(trashBin.count, "item")) : "", "trash", " data-trash") : ""));
+    // what's connected on this computer; on Linux, where no service has an app, Atlas connects them itself
+    if (clouds.length || OMARCHY) {
+      html += card("Cloud", clouds.map(function (c) {
+        var sub = !c.mounted ? esc(c.problem || "Not connected") + " \u00B7 click to try again" : c.total ? esc(fmtSize(c.free) + " free") : c.who ? esc(c.who) : "";
+        return item(c.path, c.label, sub, "cloud", c.mounted ? "" : " data-cloudmount='" + esc(c.label) + "'");
+      }).join("") || "<div class='sempty'>Connect OneDrive, Google Drive and others.</div>", "", OMARCHY ? "<button data-cloudadd title='Connect a cloud account'>" + svg("plus") + "</button>" : "");
+    }
     html += card("Favourites", S.favs.length ? S.favs.map(function (f) { return item(f, baseName(f), "", "starf", " data-fav='" + esc(f) + "'"); }).join("") :
       "<div class='sempty'>Star a folder to keep it here, or drag one in.</div>", " data-drop='fav'");
     S.groups.forEach(function (g, gi) {
@@ -2457,6 +2469,104 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   function smbKey(uri) {
     if (isOtherNet(uri)) { var n = netParts(netUri(uri)); return n ? n.scheme.replace(/^(dav|ftp)s$/, "$1") + "://" + n.host : String(uri); }
     var q = smbParse(uri); return (q.server + "/" + q.share).toLowerCase();
+  }
+  /* ---- Cloud accounts (atlas_cloud.py; on Linux only) ------------------------------------------------- */
+  function cloudOf(p) { return clouds.filter(function (c) { return p === c.path || String(p).indexOf(c.path + "/") === 0; })[0]; }
+  function cloudAdd() {
+    api("cloudinfo").then(function (info) {
+      if (!info.rclone) {
+        return dialog({ title: "Atlas needs rclone", icon: "cloud", sub: "A small program, from your system's packages, that connects to cloud services.",
+          body: "<div class='fld'><label for='clIn'>In a terminal, run</label><input id='clIn' readonly value='sudo pacman -S rclone'><div class='hint'>Other systems: the same package, from their own package manager. Then come back and click + again.</div></div>",
+          buttons: [{ label: "Copy the command", value: "copy" }, { label: "OK", value: null, pri: true }] }).then(function (v) { if (v === "copy") { api("copytext", { text: "sudo pacman -S rclone" }).then(function () { toast("Copied the command."); }).catch(fail); } });
+      }
+      var names = info.services, order = ["onedrive", "drive", "dropbox", "box", "iclouddrive"];
+      return dialog({ title: "Connect a cloud account", icon: "cloud", sub: "It shows as a folder in " + info.folder + ", for Atlas and every other app. Files download when you open them.",
+        body: order.map(function (k, i) { return "<label class='chk'><input type='radio' name='clS' value='" + k + "'" + (i ? "" : " checked") + "> " + esc(names[k]) + (k === "iclouddrive" ? " (experimental)" : "") + "</label>"; }).join(""),
+        buttons: [{ label: "Cancel", value: null }, { label: "Continue", pri: true, read: function (s) { return s.querySelector("input[name=clS]:checked").value; } }]
+      }).then(function (k) { if (k) { cloudDetails(k, names[k], {}); } });
+    }).catch(fail);
+  }
+  function cloudDetails(k, name, keep) {
+    var err = keep.error ? "<div class='warn'>" + esc(keep.error) + "</div>" : "";
+    if (k === "drive") {
+      return dialog({ title: "Connect Google Drive", icon: "cloud", sub: "Google asks each person using rclone for their own free sign-in details.",
+        body: err + "<div class='fld'><label for='clId'>Client ID</label><input id='clId' spellcheck='false' autocomplete='off' value='" + esc(keep.client_id || "") + "'></div>" +
+          "<div class='fld'><label for='clSe'>Client secret</label><input id='clSe' type='password' autocomplete='off'></div>" +
+          "<div class='hint' style='margin-bottom:10px'><button class='btn sm' id='clHelp'>" + svg("open") + "How to get them</button></div>" +
+          "<label class='chk'><input type='checkbox' id='clSh'> Try rclone's shared sign-in instead (rclone says it's being retired, so it may not work)</label><div class='warn' id='clErr' hidden></div>",
+        mount: function (s) { s.querySelector("#clHelp").onclick = function () { api("url", { url: "https://rclone.org/drive/#making-your-own-client-id" }).catch(fail); }; },
+        buttons: [{ label: "Cancel", value: null }, { label: "Sign in", pri: true,
+          check: function (s) {
+            var ok = s.querySelector("#clSh").checked || (s.querySelector("#clId").value.trim() && s.querySelector("#clSe").value.trim());
+            if (!ok) { var e = s.querySelector("#clErr"); e.hidden = false; e.textContent = "Fill in both, or tick the box to try the shared sign-in."; }
+            return !!ok;
+          },
+          read: function (s) { return { shared: s.querySelector("#clSh").checked, fields: { client_id: s.querySelector("#clId").value.trim(), client_secret: s.querySelector("#clSe").value.trim() } }; } }]
+      }).then(function (v) { if (v) { cloudRun({ service: k, shared: v.shared, fields: v.fields }, name); } });
+    }
+    if (k === "iclouddrive") {
+      return dialog({ title: "Connect iCloud Drive", icon: "cloud", sub: "Experimental: Apple offers no official way in on Linux, so this may stop working when Apple changes things.",
+        body: err + "<div class='fld'><label for='clAp'>Apple Account</label><input id='clAp' spellcheck='false' autocomplete='off' value='" + esc(keep.apple_id || "") + "'></div>" +
+          "<div class='fld'><label for='clPw'>Password</label><input id='clPw' type='password' autocomplete='off'></div>" +
+          "<div class='hint'>Atlas keeps your password, encrypted, to stay signed in. \u201CAccess iCloud Data on the Web\u201D must be on, on your Apple device. Apple will send a code to your devices next, and with Advanced Data Protection on, a request to approve.</div>",
+        buttons: [{ label: "Cancel", value: null }, { label: "Sign in", pri: true, read: function (s) { return { apple_id: s.querySelector("#clAp").value.trim(), password: s.querySelector("#clPw").value }; } }]
+      }).then(function (v) { if (v) { if (!v.apple_id || !v.password) { return cloudDetails(k, name, { apple_id: v.apple_id, error: "Fill in both." }); } cloudRun({ service: k, fields: { apple_id: v.apple_id }, password: v.password }, name, v); } });
+    }
+    cloudRun({ service: k }, name);
+  }
+  // one go at signing in: waits in a dialog (you may be in your browser), and may come back with a question, such as Apple's code
+  function cloudRun(args, name, keep) {
+    var job, over = false, signInUrl = "";
+    var pw = !!args.password;
+    var waiting_ = dialog({ title: "Connecting to " + name, icon: "cloud", sub: pw || args.step ? "Talking to the service\u2026" : "Finish signing in, in the browser page that just opened.",
+      body: "<div id='clWait'><span class='spin' style='display:inline-block'></span></div>", buttons: [{ label: "Cancel", value: "cancel", pri: true }] });
+    waiting_.then(function () { if (!over && job) { api("cancel", { job: job }).catch(function () { }); } });
+    var p = api("cloudconnect", args, function (ev) {
+      if (ev && ev.url && !signInUrl) {
+        signInUrl = ev.url;
+        var w = openDialog && openDialog.querySelector("#clWait");
+        if (w) { w.innerHTML = "<button class='btn sm' id='clOpen'>" + svg("open") + "Didn't open? Open the sign-in page</button>"; w.querySelector("#clOpen").onclick = function () { api("url", { url: signInUrl }).catch(function () { }); }; }
+      }
+    });
+    job = api.last;
+    args.password = "";
+    p.then(function (r) {
+      over = true;
+      closeDialogNow();
+      if (r.cancelled) { toast("Stopped connecting to " + name + "."); return; }
+      if (r.error) {
+        toast("Couldn't connect to " + name + ": " + r.error, { bad: true, ms: 10000 });
+        return;
+      }
+      if (r.ask) {
+        return dialog({ title: name + " is asking", icon: "cloud", body: "<div class='fld'><label for='clAn'>" + esc(r.ask.help) + "</label><input id='clAn' type='" + (r.ask.password ? "password" : "text") + "' autocomplete='off' spellcheck='false'></div>",
+          mount: function (s) { setTimeout(function () { s.querySelector("#clAn").focus(); }, 40); },
+          buttons: [{ label: "Cancel", value: null }, { label: "Continue", pri: true, read: function (s) { return s.querySelector("#clAn").value.trim(); } }]
+        }).then(function (ans) {
+          if (ans === null || ans === undefined) { return api("cloudabandon", { name: r.name }).catch(function () { }); }
+          cloudRun({ service: r.service, name: r.name, step: r.step, result: ans }, name);
+        });
+      }
+      toast(r.problem ? "Connected to " + name + ", but: " + r.problem : "Connected to " + name + ".", { bad: !!r.problem, good: !r.problem, ms: 6000 });
+      return loadDrives().then(function () { if (!r.problem) { openPath(cur(), r.path); } });
+    }).catch(function (e) { over = true; closeDialogNow(); fail(e); });
+  }
+  function cloudDisconnect(c, force) {
+    var go = function () {
+      return api("clouddisconnect", { name: c.label, force: !!force }).then(function (r) {
+        if (r.busy === "uploads") { toast(c.label + " is still uploading files. Try again when that's finished.", { bad: true, ms: 8000 }); return; }
+        if (r.busy === "open") {
+          return dialog({ title: "A program is using " + c.label, icon: "alert", sub: "Disconnecting now could interrupt it.", buttons: [{ label: "Cancel", value: false }, { label: "Disconnect anyway", value: true, pri: true }] })
+            .then(function (v) { if (v) { force = true; return go(); } });
+        }
+        if (r.error) { toast(r.error, { bad: true }); return; }
+        toast("Disconnected " + c.label + ". Its files stay in the cloud.", { good: true });
+        return loadDrives();
+      }).catch(fail);
+    };
+    if (force) { return go(); }
+    dialog({ title: "Disconnect " + c.label + "?", icon: "cloud", sub: "Its folder and the copies on this computer go; your files stay in the cloud. You can connect again any time.",
+      buttons: [{ label: "Cancel", value: false }, { label: "Disconnect", value: true, pri: true }] }).then(function (v) { if (v) { go(); } });
   }
   function shareDrive(uri) { return drives.filter(function (d) { return d.gvfs && smbKey(d.unc) === smbKey(uri); })[0]; }
   function connectShare(text, keep) {
@@ -2634,7 +2744,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   var vols = [];
   function loadDrives() {
     return api("drives").then(function (r) {
-      drives = r.drives || []; places = r.places || []; whoAmI = { user: r.user, machine: r.machine }; trashBin = r.trash || trashBin;
+      drives = r.drives || []; clouds = r.clouds || []; places = r.places || []; whoAmI = { user: r.user, machine: r.machine }; trashBin = r.trash || trashBin;
       return LINUX ? api("volumes").then(function (v) { vols = v.volumes || []; }, function () { vols = []; }) : null;
     }).then(function () {
       paintSide();
@@ -2959,6 +3069,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (!paths.length || t.mode === "space") { return; }
     var what = paths.length === 1 ? "\u201C" + baseName(paths[0]) + "\u201D" : plural(paths.length, "item");
     var network = isNetwork(paths[0]);
+    var cloudSpot = LINUX && paths.length && paths.every(function (p) { var c = cloudOf(p); return c && c.own; });
     if (t.isTrash) { permanent = true; }
     var go = function (perm) {
       return api("delete", { paths: paths, permanent: perm }).then(function (r) {
@@ -2973,8 +3084,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
         if (LINUX) { loadDrives(); }
       }).catch(fail);
     };
-    if (permanent || network) {
-      dialog({ title: "Delete " + what + " permanently?", sub: network && !permanent ? (LINUX ? "Network folders have no Trash" : "Network folders have no Recycle Bin") + ", so this cannot be undone." : (LINUX ? "This skips the Trash" : "This skips the Recycle Bin") + " and cannot be undone.",
+    if (permanent || network || cloudSpot) {
+      dialog({ title: "Delete " + what + (cloudSpot ? " from the cloud?" : " permanently?"), sub: cloudSpot ? "Atlas can't undo this. The service may keep a copy in its own recycle bin for a while." : network && !permanent ? (LINUX ? "Network folders have no Trash" : "Network folders have no Recycle Bin") + ", so this cannot be undone." : (LINUX ? "This skips the Trash" : "This skips the Recycle Bin") + " and cannot be undone.",
         icon: "trash", buttons: [{ label: "Cancel", value: false }, { label: "Delete permanently", value: true, pri: true }] })
         .then(function (ok) { if (ok) { go(true); } });
       return;
@@ -3223,6 +3334,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
      Preview pane
      ================================================================================================ */
   var pvTicket = 0, pvTimer = 0, pvShown = "";
+  var pvFetch = {};
   function paintPreview() {
     if (!S.preview) { return; }
     clearTimeout(pvTimer);
@@ -3269,7 +3381,10 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       return;
     }
     var st = $("pvStage");
-    if (!e.d) {
+    if (e.cl && !pvFetch[e.p]) {
+      // showing it would download it: only when asked
+      st.innerHTML = "<div class='pv-online'>" + svg("cloud") + "<div>Stored online</div><button class='btn sm' data-pv='fetch'>" + svg("down") + "Download and preview (" + esc(fmtSize(e.s)) + ")</button></div>";
+    } else if (!e.d) {
       if (k === "image" && e.s < 60 * 1048576) { st.classList.add("fill"); st.innerHTML = "<img class='pic' alt='' src='" + esc(fileUrl(e.p)) + "'>"; }
       else if (k === "pdf" && OMARCHY) { pdfPages(e, st, ticket); }   // WebKitGTK can't show a PDF itself; WebView2 and macOS's WebKit can
       else if (k === "pdf") { st.classList.add("tall"); st.innerHTML = "<iframe title='PDF preview' src='" + esc(fileUrl(e.p)) + "#toolbar=0&view=FitH'></iframe>"; }
@@ -4790,6 +4905,13 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   $("rPalette").onclick = palette;
   $("rTheme").onclick = function () { themeMenu($("rTheme")); };
   $("side").addEventListener("click", function (ev) {
+    if (ev.target.closest("[data-cloudadd]")) { cloudAdd(); return; }
+    var cm = ev.target.closest("[data-cloudmount]");
+    if (cm) {
+      toast("Connecting to " + cm.getAttribute("data-cloudmount") + "\u2026", { ms: 2500 });
+      api("cloudmount", { name: cm.getAttribute("data-cloudmount") }).then(function (r) { if (r.problem) { toast(r.problem, { bad: true }); } return loadDrives(); }).catch(fail);
+      return;
+    }
     if (ev.target.closest("[data-addsrv]")) { addServer(); return; } if (ev.target.closest("[data-mapdrive]")) { mapDrive(); return; } if (ev.target.closest("[data-smb]")) { connectShare(); return; } var vb = ev.target.closest("[data-vol]"); if (vb) { mountVol(vb.getAttribute("data-vol")); return; }
     if (ev.target.closest("[data-clrrec]")) { S.recent = []; save(); paintSide(); return; }
     if (ev.target.closest("[data-newgroup]")) { newGroup(); return; }
@@ -4834,6 +4956,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     }
     var rem = LINUX && drives.filter(function (d) { return d.path === path && d.type === "Removable"; })[0];
     if (rem) { items.push("-"); items.push({ label: "Eject", icon: "up", run: function () { ejectDrive(rem); } }); items.push({ label: "What's using it", icon: "alert", run: function () { whoIsUsing([rem.path]); } }); }
+    var ownCloud = clouds.filter(function (c) { return c.own && c.path === path; })[0];
+    if (ownCloud) { items.push("-"); items.push({ label: "Disconnect\u2026", icon: "x", linux: true, run: function () { cloudDisconnect(ownCloud); } }); }
     var drv = drives.filter(function (d) { return d.path.toUpperCase() === String(path).toUpperCase() && d.type === "Network"; })[0];
     if (drv) {
       items.push("-");
@@ -4864,6 +4988,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     else if (a === "copypath") { copyPath(t); }
     else if (a === "props") { showProps(sel.length ? sel.map(function (e) { return e.p; }) : [one ? one.p : t.path]); }
     else if (a === "wall" && one) { setWallpaper(one.p); }
+    else if (a === "fetch" && one) { pvFetch[one.p] = 1; pvShown = ""; paintPreviewNow(); }
     else if (a === "space") { openSpace(t, t.path); }
     else if (a === "bulk") { bulkRename(t); }
     else if (a === "sizes") { folderSizes(t); }
