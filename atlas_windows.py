@@ -89,6 +89,8 @@ class Desktop(Worker):
         self.watchers = {}
         self.letters = None
         self.icon_cache = {}
+        self.dropped = []          # where the files last dropped in from another app are
+        self.drop_hooked = False
 
     # ---- The window's own thread -------------------------------------------------------------------
     def form(self):
@@ -133,6 +135,39 @@ class Desktop(Worker):
     def on_loaded(self):
         self.set_zoom(float(self.host.prefs.get("Zoom", 1.15)))
         self.set_dark(bool(self.host.prefs.get("Dark", True)))
+        try:
+            self.ui(self.hook_drops)
+        except Exception:
+            pass
+
+    # Files dropped in from Explorer: the page can't see where they are, only WebView2 can, so the page sends
+    # them with the message "FilesDropped" (which pywebview leaves alone) and its "dropped" request follows.
+    # This runs on the window's thread as each message arrives, so the paths are here before that request.
+    def hook_drops(self, f):
+        if self.drop_hooked:
+            return
+        core2 = f.webview.CoreWebView2
+        if core2 is None:
+            return
+
+        def received(_s, args):
+            try:
+                if args.TryGetWebMessageAsString() != "FilesDropped":
+                    return
+            except Exception:   # a message that isn't a string: one of pywebview's own
+                return
+            try:
+                objs = args.AdditionalObjects
+            except AttributeError:
+                objs = args.get_AdditionalObjects()
+            paths = []
+            for o in list(objs or []):
+                p = getattr(o, "Path", None)
+                if p:
+                    paths.append(str(p))
+            self.dropped = paths
+        core2.WebMessageReceived += received
+        self.drop_hooked = True
 
     def listen(self):
         try:
@@ -249,6 +284,9 @@ class Desktop(Worker):
         elif op == "runps":
             self.run_powershell(str(m.get("path") or ""), bool(m.get("admin")))
             reply(rid, True)
+        elif op == "dropped":
+            paths, self.dropped = self.dropped, []
+            reply(rid, {"paths": [p for p in paths if os.path.exists(p)]})
         elif op == "dragout":
             paths = [str(p) for p in m.get("paths") or [] if os.path.exists(str(p))]
             if not paths or not self.ui_later(lambda f: self.drag_out(f, rid, paths)):

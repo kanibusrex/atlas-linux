@@ -1158,6 +1158,13 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     });
   }
   function apiFiles(op, args, files) {
+    // in the Python Atlas on Windows: the files go to the window through WebView2 itself (the only way to
+    // learn where they are), under the name pywebview leaves alone, and the request follows them
+    var wv = W.chrome && W.chrome.webview;
+    if (host === W.__atlasHost && !LINUX && wv && wv.postMessageWithAdditionalObjects) {
+      try { wv.postMessageWithAdditionalObjects("FilesDropped", files); } catch (err) { return Promise.reject(err); }
+      return api(op, args);
+    }
     return new Promise(function (resolve, reject) {
       if (!host || !host.postMessageWithAdditionalObjects) { reject(new Error("Dropping files from Explorer needs a newer WebView2.")); return; }
       seq += 1;
@@ -4352,7 +4359,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (!target) { return; }
       ev.preventDefault();
       target.el.classList.add("drop");
-      var move = drag ? dropEffect(drag.paths, target.path, ev) : false;
+      var move = drag ? dropEffect(drag.paths, target.path, ev) : ev.shiftKey && !ev.ctrlKey;
       ev.dataTransfer.dropEffect = move ? "move" : "copy";
       showTip(ev, (move ? "Move to " : "Copy to ") + baseName(target.path));
     });
@@ -4367,12 +4374,16 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       // on Linux, files dragged in from the file manager come as file:// addresses
       var uris = LINUX ? (ev.dataTransfer.getData("text/uri-list") || "").split(/\r?\n/).filter(function (u) { return /^file:\/\//.test(u); }) : [];
       if (uris.length) { transfer(uris.map(function (u) { return decodeURIComponent(u.replace(/^file:\/\/[^\/]*/, "")); }), target.path, false); return; }
-      if (ev.dataTransfer.files && ev.dataTransfer.files.length) {
-        apiFiles("dropped", {}, Array.prototype.slice.call(ev.dataTransfer.files)).then(function (r) {
-          if (r.paths && r.paths.length) { transfer(r.paths, target.path, false); } else { toast("Those files could not be read from the drop.", { bad: true }); }
-        }).catch(fail);
-      }
+      dropFiles(ev, target.path);
     });
+  }
+  // files dropped in from another app (Explorer, the desktop...): copied, or moved with Shift as Explorer does
+  function dropFiles(ev, dest) {
+    if (!ev.dataTransfer.files || !ev.dataTransfer.files.length) { return; }
+    var move = ev.shiftKey && !ev.ctrlKey;
+    apiFiles("dropped", {}, Array.prototype.slice.call(ev.dataTransfer.files)).then(function (r) {
+      if (r && r.paths && r.paths.length) { transfer(r.paths, dest, move); } else { toast("Those files could not be read from the drop.", { bad: true }); }
+    }).catch(fail);
   }
   function dropTarget(t, ev) {
     if (t.mode === "space" || (t.path === "" && t.mode === "folder") || inZip(t)) { return null; }
@@ -4406,7 +4417,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     s.classList.add("drop");
     if (dest === "fav") { ev.dataTransfer.dropEffect = "link"; showTip(ev, "Add to favourites"); return; }
     if (/^g\d+$/.test(dest)) { ev.dataTransfer.dropEffect = "link"; showTip(ev, "Add to " + S.groups[+dest.slice(1)].name); return; }
-    var move = drag ? dropEffect(drag.paths, dest, ev) : false;
+    var move = drag ? dropEffect(drag.paths, dest, ev) : ev.shiftKey && !ev.ctrlKey;
     ev.dataTransfer.dropEffect = move ? "move" : "copy";
     showTip(ev, (move ? "Move to " : "Copy to ") + baseName(dest));
   });
@@ -4419,7 +4430,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     ev.preventDefault();
     if (dest === "fav") { if (drag) { drag.paths.forEach(function (p) { if (!S.favs.some(function (f) { return samePath(f, p); })) { S.favs.push(p); } }); save(); paintSide(); toast("Added to favourites."); } drag = null; return; }
     if (/^g\d+$/.test(dest)) { if (drag) { addToGroup(+dest.slice(1), drag.paths); } drag = null; return; }
-    if (drag) { transfer(drag.paths, dest, dropEffect(drag.paths, dest, ev)); drag = null; }
+    if (drag) { transfer(drag.paths, dest, dropEffect(drag.paths, dest, ev)); drag = null; return; }
+    dropFiles(ev, dest);
   });
   // files over a part of the window that takes no drop: refused, so the window doesn't go to the file instead
   W.addEventListener("dragover", function (ev) {
