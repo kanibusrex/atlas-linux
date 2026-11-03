@@ -8,6 +8,7 @@ thread (ui).
 The same few names (Desktop, DATA_DIR, CACHE_DIR, SYSTEM) are what atlas_linux.py gives on Linux.
 """
 
+import base64
 import ctypes
 import os
 import re
@@ -33,6 +34,8 @@ shell32.SHGetFileInfoW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_vo
 shell32.SHGetFileInfoW.restype = ctypes.c_void_p
 shell32.SHObjectProperties.argtypes = [wintypes.HWND, wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR]
 user32.DestroyIcon.argtypes = [wintypes.HICON]
+shell32.ShellExecuteW.argtypes = [wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.c_int]
+shell32.ShellExecuteW.restype = ctypes.c_void_p
 
 
 class SHFILEINFOW(ctypes.Structure):
@@ -104,6 +107,15 @@ class Desktop(Worker):
             out["v"] = fn(f)
         f.Invoke(Func[Type](run))
         return out.get("v")
+
+    def ui_later(self, fn):
+        """Runs fn on the window's thread without waiting for it (for something that takes as long as you do)."""
+        f = self.form()
+        if f is None:
+            return False
+        from System import Action
+        f.BeginInvoke(Action(lambda: fn(f)))
+        return True
 
     # ---- Starting up: before the window, and once it is made ------------------------------------------
     def start(self):
@@ -234,6 +246,13 @@ class Desktop(Worker):
             else:
                 subprocess.Popen(["powershell.exe", "-NoExit", "-NoProfile"], cwd=path, creationflags=subprocess.CREATE_NEW_CONSOLE)
             reply(rid, True)
+        elif op == "runps":
+            self.run_powershell(str(m.get("path") or ""), bool(m.get("admin")))
+            reply(rid, True)
+        elif op == "dragout":
+            paths = [str(p) for p in m.get("paths") or [] if os.path.exists(str(p))]
+            if not paths or not self.ui_later(lambda f: self.drag_out(f, rid, paths)):
+                reply(rid, None)
         elif op == "properties":
             # Windows' own Properties window
             p = str(m.get("path"))
@@ -259,6 +278,49 @@ class Desktop(Worker):
         else:
             return False
         return True
+
+    # "Run with PowerShell", as Explorer does it: in its own window, in the script's folder, past the
+    # execution policy unless only signed scripts may run; and the same as administrator
+    def run_powershell(self, path, admin):
+        if not path.lower().endswith(".ps1") or not os.path.isfile(path):
+            raise RuntimeError("That isn't a PowerShell script.")
+        folder = os.path.dirname(path)
+        q = lambda s: "'" + s.replace("'", "''") + "'"
+        script = ("Set-Location -LiteralPath " + q(folder) + "\n"
+                  "if ((Get-ExecutionPolicy) -ne 'AllSigned') { Set-ExecutionPolicy -Scope Process Bypass -Force }\n"
+                  "& " + q(path) + "\n")
+        args = "-EncodedCommand " + base64.b64encode(script.encode("utf-16-le")).decode()
+        if admin:
+            r = shell32.ShellExecuteW(None, "runas", "powershell.exe", args, folder, 1)
+            if (r or 0) <= 32 and r != 5:   # 5: you said no to Windows' question, which is an answer
+                raise RuntimeError("Windows couldn't start PowerShell as administrator.")
+            return
+        # Windows PowerShell finds its own modules: PowerShell 7's (when Atlas was started from it) won't load in it
+        env = {k: v for k, v in os.environ.items() if k.upper() != "PSMODULEPATH"}
+        subprocess.Popen(["powershell.exe"] + args.split(" "), cwd=folder, env=env, creationflags=subprocess.CREATE_NEW_CONSOLE)
+
+    # dragging files out of Atlas: a drag of Windows' own, with the files in it the way Explorer gives them,
+    # so they can be dropped in Explorer, on the desktop, into an email or any other app (and back into Atlas)
+    def drag_out(self, f, rid, paths):
+        effect = None
+        try:
+            import System.Windows.Forms as WinForms
+            from System.Collections.Specialized import StringCollection
+            # the button already let go: no drag, or it would drop wherever the pointer is
+            if WinForms.Control.MouseButtons == getattr(WinForms.MouseButtons, "None"):
+                return
+            sc = StringCollection()
+            for p in paths:
+                sc.Add(p)
+            do = WinForms.DataObject()
+            do.SetFileDropList(sc)
+            do.SetText("\r\n".join(paths))
+            E = WinForms.DragDropEffects
+            effect = str(f.DoDragDrop(do, E.Copy | E.Move | E.Link))
+        except Exception:
+            pass
+        finally:
+            self.host.reply(rid, effect)
 
     # files on the clipboard the way Explorer puts them there, so a paste there (or here) works
     def clip_set(self, paths, cut):

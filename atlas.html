@@ -4021,6 +4021,10 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
         items.push({ label: "Open in the other pane", icon: "columns", run: function () { openItem(t, one, "other"); } });
       }
       if (one && !one.d) { items.push({ label: "Open with\u2026", icon: "open", run: function () { api("openwith", { path: one.p }).catch(fail); } }); }
+      if (!LINUX && one && !one.d && extOf(one.n) === ".ps1" && !inZip(t)) {
+        items.push({ label: "Run with PowerShell", icon: "play", run: function () { api("runps", { path: one.p }).catch(fail); } });
+        items.push({ label: "Run with PowerShell as administrator", icon: "play", run: function () { api("runps", { path: one.p, admin: true }).catch(fail); } });
+      }
       if (LINUX && one && kindOf(one) === "image") { items.push({ label: "Set as wallpaper", icon: "pic", run: function () { setWallpaper(one.p); } }); }
       if (one && isZipFile(one)) {
         items.push({ label: "Look inside", icon: "folder", run: function () { openPath(t, one.p); } });
@@ -4326,6 +4330,15 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (!e) { ev.preventDefault(); return; }
       if (!t.sel.has(e.p)) { t.sel = new Set([e.p]); paintList(i); }
       drag = { paths: selPaths(t), from: i };
+      if (!LINUX) {
+        // on Windows the drag is the window's own, carrying the files themselves, so it can be dropped in
+        // Explorer, an email or any other app; a drop back here still finds them in drag
+        ev.preventDefault();
+        t.pendingSingle = null;
+        var mine = drag;
+        api("dragout", { paths: drag.paths }).catch(function () { }).then(function () { if (drag === mine) { drag = null; } clearDrop(); });
+        return;
+      }
       ev.dataTransfer.effectAllowed = "copyMove";
       ev.dataTransfer.setData("text/plain", drag.paths.join("\r\n"));
       var ghost = D.createElement("div"); ghost.className = "dragtip"; ghost.textContent = drag.paths.length === 1 ? baseName(drag.paths[0]) : plural(drag.paths.length, "item");
@@ -4408,6 +4421,12 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (/^g\d+$/.test(dest)) { if (drag) { addToGroup(+dest.slice(1), drag.paths); } drag = null; return; }
     if (drag) { transfer(drag.paths, dest, dropEffect(drag.paths, dest, ev)); drag = null; }
   });
+  // files over a part of the window that takes no drop: refused, so the window doesn't go to the file instead
+  W.addEventListener("dragover", function (ev) {
+    if (ev.defaultPrevented || !(ev.dataTransfer.types && Array.prototype.indexOf.call(ev.dataTransfer.types, "Files") !== -1)) { return; }
+    ev.preventDefault(); ev.dataTransfer.dropEffect = "none";
+  });
+  W.addEventListener("drop", function (ev) { if (!ev.defaultPrevented) { ev.preventDefault(); } });
   function dropDest(s) {
     if (s.classList.contains("sgroup")) {
       var dz = s.getAttribute("data-drop");
