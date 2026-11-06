@@ -398,4 +398,4 @@ OPS = {
 }
 
 # Linux's own: its Trash, Samba's smbclient, permission bits, ending a program, Omarchy's wallpaper
-NOT_HERE = {"restore", "emptytrash", "smbshares", "perms", "chperm", "endprogram", "wallpaper"}
+NOT_HERE = {"restore", "emptytrash", "smbshares", "perms", "chperm", "endprogram", "wallpaper", "mklink"}

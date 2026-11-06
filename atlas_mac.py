@@ -76,6 +76,40 @@ def applescript_text(s):
     return '"' + str(s).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def AppHelper_call(fn):
+    from PyObjCTools import AppHelper
+    AppHelper.callAfter(fn)
+
+
+_DragSource = None
+
+
+def drag_source(ended):
+    """An NSDraggingSource that offers copy or move (Finder picks, as it does for its own drags) and says how it ended."""
+    global _DragSource
+    if _DragSource is None:
+        import AppKit
+        import objc
+
+        try:
+            protos = [objc.protocolNamed("NSDraggingSource")]
+        except Exception:
+            protos = []
+
+        class AtlasDragSource(AppKit.NSObject, protocols=protos):
+            def draggingSession_sourceOperationMaskForDraggingContext_(self, session, context):
+                return AppKit.NSDragOperationCopy | AppKit.NSDragOperationMove | AppKit.NSDragOperationGeneric
+
+            def draggingSession_endedAtPoint_operation_(self, session, point, operation):
+                ended = getattr(self, "ended", None)
+                if ended:
+                    ended(operation)
+        _DragSource = AtlasDragSource
+    src = _DragSource.alloc().init()
+    src.ended = ended
+    return src
+
+
 class Desktop(Worker):
     def __init__(self, host):
         super().__init__()
@@ -115,6 +149,9 @@ class Desktop(Worker):
         self.start_worker()
         if not self.host.pick:
             threading.Thread(target=self.listen, daemon=True).start()
+        # pywebview notes where files dropped in from Finder are only while something listens for drops
+        from webview.dom import _dnd_state
+        _dnd_state["num_listeners"] += 1
         self.every(2000, self.check_drives)
         self.every(1000, self.check_watched)
 
@@ -279,9 +316,66 @@ class Desktop(Worker):
             reply(rid, {"volumes": []})
         elif op == "mountanswer":
             reply(rid, True)
+        elif op == "dropped":
+            reply(rid, {"paths": self.dropped([str(n) for n in m.get("names") or []])})
+        elif op == "dragout":
+            paths = [str(p) for p in m.get("paths") or [] if os.path.exists(str(p))]
+            if not paths:
+                reply(rid, None)
+            else:
+                AppHelper_call(lambda: self.drag_out(rid, paths))
         else:
             return False
         return True
+
+    # files dropped in from Finder: pywebview kept where they were (name, path) as the window took them
+    def dropped(self, names):
+        from webview.dom import _dnd_state
+        held, out = _dnd_state["paths"], []
+        for n in names:
+            for k, (name, path) in enumerate(held):
+                if urllib.parse.unquote(name) == n:
+                    out.append(urllib.parse.unquote(path))
+                    del held[k]
+                    break
+        del held[:]   # whatever wasn't asked for belonged to a drop the page didn't take
+        return [p for p in out if os.path.exists(p)]
+
+    # dragging files out of Atlas: an AppKit drag of the files themselves, so they can be dropped in Finder,
+    # on the desktop, into Mail or any other app (and back into Atlas, where the page still knows the drag)
+    def drag_out(self, rid, paths):
+        import AppKit
+        import Foundation
+        done = []
+
+        def end(op):
+            if not done:
+                done.append(op)
+                self.host.reply(rid, {AppKit.NSDragOperationMove: "Move", AppKit.NSDragOperationCopy: "Copy"}.get(op, "None" if op == 0 else "Copy"))
+        try:
+            bv = self.view()
+            # the button already let go: no drag, or it would drop wherever the pointer is
+            if bv is None or not (AppKit.NSEvent.pressedMouseButtons() & 1):
+                end(0)
+                return
+            win, wv = bv.window, bv.webview
+            loc = win.mouseLocationOutsideOfEventStream()
+            ev = AppKit.NSEvent.mouseEventWithType_location_modifierFlags_timestamp_windowNumber_context_eventNumber_clickCount_pressure_(
+                AppKit.NSEventTypeLeftMouseDragged, loc, 0, AppKit.NSProcessInfo.processInfo().systemUptime(),
+                win.windowNumber(), None, 0, 1, 1.0)
+            at = wv.convertPoint_fromView_(loc, None)
+            items = []
+            for k, p in enumerate(paths[:200]):
+                item = AppKit.NSDraggingItem.alloc().initWithPasteboardWriter_(Foundation.NSURL.fileURLWithPath_(p))
+                icon = AppKit.NSWorkspace.sharedWorkspace().iconForFile_(p)
+                icon.setSize_((48, 48))
+                off = min(k, 4) * 6
+                item.setDraggingFrame_contents_(((at.x - 24 + off, at.y - 24 + off), (48, 48)), icon)
+                items.append(item)
+            self.drag_source = drag_source(end)
+            wv.beginDraggingSessionWithItems_event_source_(items, ev, self.drag_source)
+        except Exception:
+            end(0)
 
     def open_with(self, rid, path):
         r = osascript('POSIX path of (choose application with prompt "Open ' + applescript_text(os.path.basename(path))[1:-1] + ' with:" as alias)')

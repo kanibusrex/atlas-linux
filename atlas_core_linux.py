@@ -8,6 +8,7 @@ Like atlas_core.py, no windows here, only files: everything can run in a backgro
 """
 
 import os
+import re
 import pwd
 import shutil
 import subprocess
@@ -153,6 +154,21 @@ def _statvfs(path, wait=2.0):
     return box.get("v")
 
 
+def device_label(host):
+    """GVFS names a phone after its maker, model and serial number ("SAMSUNG_SAMSUNG_Android_R58M12ABCDE",
+    "%5Busb%3A003%2C007%5D" for a camera): the maker and model, readably."""
+    words = [w for w in re.split(r"[_\s]+", host) if w]
+    # the serial number at the end: long, and letters mixed with numbers
+    if len(words) > 1 and len(words[-1]) >= 8 and re.search(r"\d", words[-1]):
+        words.pop()
+    out = []
+    for w in words:
+        if not out or out[-1].lower() != w.lower():   # "SAMSUNG SAMSUNG Android" said once
+            out.append(w)
+    name = " ".join(out)
+    return name if name and not name.startswith("[") else "Phone or camera"
+
+
 def gvfs_shares():
     """Network places connected through GVFS: SMB shares, and SFTP, FTP and WebDAV servers."""
     out = []
@@ -181,11 +197,17 @@ def gvfs_shares():
             scheme = "davs" if kv.get("ssl") == "true" else "dav"
             prefix = kv.get("prefix", "/")
             label, unc, fs = host + (prefix.rstrip("/") if prefix not in ("", "/") else ""), scheme + "://" + user + host + port + prefix, scheme
+        elif kind_ in ("mtp", "gphoto2", "afc") and host:
+            # a phone or camera on the cable (Android through MTP, cameras through gphoto2, iPhones through afc)
+            label, unc, fs = "iPhone or iPad" if kind_ == "afc" else device_label(host), kind_ + "://" + host + "/", kind_
         else:
             continue
         mnt = os.path.join(root, nm)
-        info = {"path": mnt, "type": "Network", "ready": False, "label": label, "total": 0, "free": 0,
+        phone = kind_ in ("mtp", "gphoto2", "afc")
+        info = {"path": mnt, "type": "Removable" if phone else "Network", "ready": False, "label": label, "total": 0, "free": 0,
                 "unc": unc, "fs": fs, "gvfs": True}
+        if phone:
+            info["phone"] = True
         sv = _statvfs(mnt)
         if sv:
             info["total"] = sv.f_blocks * sv.f_frsize

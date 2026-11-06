@@ -116,6 +116,8 @@ def to_entry(name, full, st_l=None):
         flags += "r"
     if link:
         flags += "l"
+    if SEP == "/" and st and not is_dir and st.st_mode & 0o100:
+        flags += "x"
     m = epoch_ms(st.st_mtime) if st else 0
     c = 0
     if st:
@@ -395,6 +397,22 @@ def new_file(d, name):
     with open(full, "xb"):
         pass
     return {"path": full, "name": n}
+
+
+def make_links(paths, d):
+    """Symbolic links to each of paths, made in the folder d: "Link to Report.pdf", "Link to Report (2).pdf"..."""
+    made, problems = [], []
+    for p in paths or []:
+        p = str(p)
+        try:
+            n = free_name(d, "Link to " + base_of(p))
+            full = join(d, n)
+            # beside what it points to, the link points there by name, so the pair can move together
+            os.symlink(base_of(p) if parent_of(p) == parent_of(full) else p, full)
+            made.append({"path": full, "name": n})
+        except OSError as e:
+            problems.append({"path": p, "error": e.strerror or str(e)})
+    return {"made": made, "problems": problems}
 
 
 def rename_items(items):
@@ -1353,6 +1371,7 @@ OPS = {
     "sizes": lambda a, state: sizes(a.get("paths"), state),
     "children": lambda a, state: children_sizes(str(a.get("path") or ""), state),
     "rename": lambda a, state: rename_items(a.get("items")),
+    "mklink": lambda a, state: make_links(a.get("paths"), str(a.get("dir") or "")),
     "mkdir": lambda a, state: new_folder(str(a.get("dir")), str(a.get("name"))),
     "newfile": lambda a, state: new_file(str(a.get("dir")), str(a.get("name"))),
     "conflicts": lambda a, state: conflicts(a.get("sources"), str(a.get("dest"))),

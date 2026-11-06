@@ -151,7 +151,26 @@ try:
     if sys.platform in ("darwin", "win32"):
         check("an online-only file is marked", core.system.online_only("x", Marks) is True)
         check("a file on this computer isn't", core.system.online_only("x", os.stat(__file__)) is False, os.stat(__file__))
+    if sys.platform != "win32":
+        one = os.path.join(a, "one.txt")
+        r = run("mklink", paths=[one], dir=a)
+        made = (r.get("made") or [{}])[0]
+        check("a link is made beside the file", made.get("name") == "Link to one.txt" and os.readlink(made.get("path", "")) == "one.txt", r)
+        r2 = run("mklink", paths=[one], dir=a)
+        check("a second link gets a free name", (r2.get("made") or [{}])[0].get("name") == "Link to one (2).txt", r2)
+        e = [x for x in run("list", path=a)["entries"] if x["n"] == "Link to one.txt"]
+        check("the link is listed as a link", bool(e) and "l" in e[0]["a"], e)
+        run("chperm", paths=[one], on=0o111, off=0, group="", recursive=False)
+        e = [x for x in run("list", path=a)["entries"] if x["n"] == "one.txt"]
+        check("a runnable file is marked x", bool(e) and "x" in e[0]["a"], e)
+        run("chperm", paths=[one], on=0, off=0o111, group="", recursive=False)
+        e = [x for x in run("list", path=a)["entries"] if x["n"] == "one.txt"]
+        check("and unmarked again", bool(e) and "x" not in e[0]["a"], e)
+        for x in (made.get("path"), (r2.get("made") or [{}])[0].get("path")):
+            if x:
+                os.unlink(x)
     if sys.platform.startswith("linux"):
+        check("a phone's name is readable", core.system.device_label("SAMSUNG_SAMSUNG_Android_R58M12ABCDE") == "SAMSUNG Android")
         check("the drive list has its clouds", isinstance(run("drives").get("clouds"), list))
 
     if sys.platform == "win32":

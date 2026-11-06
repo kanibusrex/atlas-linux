@@ -9,7 +9,7 @@ Atlas began as a Windows file explorer (PowerShell + WebView2). This is its Linu
 ## Features
 
 ### Finding your way
-- **Tabs and two panes** side by side (Ctrl+\\), with each tab's history.
+- **Tabs and two panes** side by side (Ctrl+\\), with each tab's history. Ctrl+Shift+T opens a closed tab again.
 - **Folder columns** above the list, so you can see and jump anywhere along the path.
 - **Details or tiles view**, sorting by name, type, age, date or size, and quick filters by kind, age and size.
 - **Search** below the current folder (Enter in the filter box), with wildcards.
@@ -19,6 +19,10 @@ Atlas began as a Windows file explorer (PowerShell + WebView2). This is its Linu
 
 ### Files
 - Copy and move with a queue you can pause, with progress and speed.
+- **Drag and drop with other apps**: drag files out into a browser, a chat or another file manager, or drop them in from anywhere.
+- **Duplicate** (Ctrl+Shift+D), **Create a link**, and **Allow running as a program** for a downloaded AppImage or script.
+- **Select by pattern** (Ctrl+S, like `*.jpg; *.png`) and **Invert selection** (Ctrl+Shift+I).
+- **Phones and cameras** on the cable show up with the drives (Android needs `gvfs-mtp`, iPhones `gvfs-afc`).
 - Rename in place (F2), or many at once: find and replace, add text, number, change case or type.
 - **Undo (Ctrl+Z)** for moves, copies, renames, new items, deletions and restores.
 - **Properties**: owner, group, and read / change / run permissions, for one item or many, with "also change everything inside".

@@ -1099,6 +1099,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     <symbol id="i-starf" viewBox="0 0 24 24"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z" fill="currentColor"/></symbol>
     <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/></symbol>
     <symbol id="i-drive" viewBox="0 0 24 24"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M5 13l2-7h10l2 7M7 16.5h.01"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></symbol>
     <symbol id="i-net" viewBox="0 0 24 24"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M12 13V9M8 5h8v4H8zM7 16.5h.01"/></symbol>
     <symbol id="i-server" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="7" rx="2"/><rect x="4" y="14" width="16" height="7" rx="2"/><path d="M8 6.5h.01M8 17.5h.01"/></symbol>
     <symbol id="i-pc" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
@@ -1230,6 +1231,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   /* ---- Paths (Windows, or Linux in its window there) ---------------------------------------------- */
   // "" is This PC; \\server is a server's shares. On Linux, / is the top and drives are mount points.
   var LINUX = !!W.__atlasLinux;
+  var MAC = W.__atlasSystem === "mac";
   var OMARCHY = LINUX && (W.__atlasSystem || "linux") === "linux";   // Linux mode is macOS's too, which has no Omarchy theme
   var SEP = LINUX ? "/" : "\\";
   if (LINUX) { D.documentElement.classList.add("linux"); }
@@ -1285,6 +1287,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (LINUX) { var c1 = trimSlash(child), q1 = trimSlash(parent); return c1 === q1 || c1.indexOf(q1.replace(/\/$/, "") + "/") === 0; }
     var c = trimSlash(child).toLowerCase(), q = trimSlash(parent).toLowerCase(); return c === q || c.indexOf(q.replace(/\\$/, "") + "\\") === 0; }
   // a drive's short name: C: on Windows, its label (File system, Home, a USB stick's name) on Linux
+  function driveIcon(d) { return d.phone ? "phone" : d.type === "Network" ? "net" : "drive"; }
   function driveName(d) { return LINUX ? (d.label || d.path) : d.path.slice(0, 2); }
 
   /* ---- Formatting ---------------------------------------------------------------------------------- */
@@ -2242,8 +2245,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   function driveCard(d) {
     var used = d.total ? (d.total - d.free) / d.total : 0;
     var name = LINUX ? driveName(d) : (d.label || (d.type === "Network" ? "Network drive" : d.type === "Removable" ? "USB drive" : "Local disk")) + " (" + d.path.slice(0, 2) + ")";
-    return "<button class='dcard' data-go='" + esc(d.path) + "' title='" + esc(d.unc || d.path) + "'><span class='dtop'><span class='qi'>" + svg(d.type === "Network" ? "net" : "drive") + "</span>" +
-      "<span style='min-width:0'><div class='dname'>" + esc(name) + "</div><div class='dsub'>" + esc(LINUX ? (d.gvfs ? d.unc : d.path + (d.unc ? " \u00B7 " + d.unc : "")) : d.unc || (d.type === "Fixed" ? "This PC" : d.type)) + "</div></span></span>" +
+    return "<button class='dcard' data-go='" + esc(d.path) + "' title='" + esc(d.unc || d.path) + "'><span class='dtop'><span class='qi'>" + svg(driveIcon(d)) + "</span>" +
+      "<span style='min-width:0'><div class='dname'>" + esc(name) + "</div><div class='dsub'>" + esc(LINUX ? (d.phone ? "Phone or camera" : d.gvfs ? d.unc : d.path + (d.unc ? " \u00B7 " + d.unc : "")) : d.unc || (d.type === "Fixed" ? "This PC" : d.type)) + "</div></span></span>" +
       (d.ready ? "<span class='dmeter'><i class='" + (used > 0.9 ? "full" : "") + "' style='width:" + Math.max(1, Math.round(used * 100)) + "%'></i></span>" +
         "<span class='dnums'><span><b>" + fmtSize(d.free) + "</b> free</span><span>" + Math.round(used * 100) + "% of " + fmtSize(d.total) + " used</span></span>" :
         "<span class='dnums'><span>Not ready</span></span>") + "</button>";
@@ -2332,7 +2335,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (PICK) {
       var ph = card("", places.map(function (pl) { return item(pl.path, pl.name, "", PLACEICON[pl.name] || "folder"); }).join(""));
       if (S.favs.length) { ph += card("Favourites", S.favs.map(function (f) { return item(f, baseName(f), "", "starf"); }).join("")); }
-      ph += card("Drives", drives.map(function (d) { return item(d.path, driveName(d), "", d.type === "Network" ? "net" : "drive"); }).join(""));
+      ph += card("Drives", drives.map(function (d) { return item(d.path, driveName(d), "", driveIcon(d)); }).join(""));
       if (clouds.length) { ph += card("Cloud", clouds.filter(function (c) { return c.mounted; }).map(function (c) { return item(c.path, c.label, "", "cloud"); }).join("")); }
       $("sidePin").innerHTML = "";
       $("sideScroll").innerHTML = ph;
@@ -2342,7 +2345,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       var used = d.total ? (d.total - d.free) / d.total : 0;
       var name = LINUX ? driveName(d) : d.path.slice(0, 2) + (d.label ? " " + d.label : d.type === "Network" ? " Network" : d.type === "Removable" ? " USB" : "");
       return "<button class='sitem sdrv" + (isHere(d.path) ? " here" : "") + "' data-go='" + esc(d.path) + "' title='" + esc(d.unc || d.path) + "'>" +
-        "<span class='top'>" + svg(d.type === "Network" ? "net" : "drive") + "<span class='lbl'>" + esc(name) + "</span>" + (d.ready && d.total ? "<span class='pct'>" + Math.round(used * 100) + "%</span>" : "") + "</span>" +
+        "<span class='top'>" + svg(driveIcon(d)) + "<span class='lbl'>" + esc(name) + "</span>" + (d.ready && d.total ? "<span class='pct'>" + Math.round(used * 100) + "%</span>" : "") + "</span>" +
         (d.ready && d.total ? "<span class='dbar'><i class='" + (used > 0.9 ? "full" : "") + "' style='width:" + Math.max(1, Math.round(used * 100)) + "%'></i></span><span class='sub'>" + esc(fmtSize(d.free) + " free of " + fmtSize(d.total)) + "</span>" :
           "<span class='sub'>" + esc(d.unc || "Not ready") + "</span>") + "</button>";
     }).join("") + vols.map(function (v) {
@@ -3013,6 +3016,63 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       pushUndo("making " + r.name, function () { return api("delete", { paths: [r.path], permanent: false }).then(checked); });
       return openPath(t, t.path, { keep: true, select: [r.name] }).then(function () { startRename(t, r.name); });
     }).catch(fail);
+  }
+  // copies beside the originals: "Report (2).pdf"
+  function duplicateItems(t) {
+    if (zipBlocked(t)) { return; }
+    byFolder(selPaths(t)).forEach(function (g) { transfer(g.paths, g.dir, false); });
+  }
+  function byFolder(paths) {
+    var out = [], at = {};
+    paths.forEach(function (p) { var d = parentOf(p); if (!(d in at)) { at[d] = out.length; out.push({ dir: d, paths: [] }); } out[at[d]].paths.push(p); });
+    return out;
+  }
+  // symbolic links beside the originals: "Link to Report.pdf"
+  function makeLinks(t) {
+    if (zipBlocked(t)) { return; }
+    var groups = byFolder(selPaths(t)), made = [];
+    groups.reduce(function (pr, g) {
+      return pr.then(function () { return api("mklink", { paths: g.paths, dir: g.dir }).then(function (r) { made = made.concat(r.made || []); checked(r); }); });
+    }, Promise.resolve()).catch(fail).then(function () {
+      if (!made.length) { return; }
+      var u = pushUndo(made.length === 1 ? "making " + made[0].name : "making " + plural(made.length, "link"), function () { return api("delete", { paths: made.map(function (m) { return m.path; }), permanent: true }).then(checked); });
+      undoToast(made.length === 1 ? "Made " + made[0].name + "." : "Made " + plural(made.length, "link") + ".", u, { good: true });
+      if (t.mode === "folder") { openPath(t, t.path, { keep: true, select: made.filter(function (m) { return samePath(parentOf(m.path), t.path); }).map(function (m) { return m.name; }) }); }
+    });
+  }
+  // the run bits (chmod +x / -x) on files: a downloaded AppImage or script made runnable
+  function setRunnable(t, on) {
+    var paths = selected(t).filter(function (e) { return !e.d; }).map(function (e) { return e.p; });
+    if (!paths.length) { return; }
+    var go = function (yes) { return api("chperm", { paths: paths, on: yes ? 73 : 0, off: yes ? 0 : 73, group: "", recursive: false }).then(checked); };
+    go(on).then(function () {
+      var what = paths.length === 1 ? baseName(paths[0]) : plural(paths.length, "file");
+      undoToast(on ? what + " can run as a program now." : what + " won't run as a program now.", pushUndo((on ? "allowing " : "stopping ") + what + " to run", function () { return go(!on); }), { good: true });
+      refresh(t, true);
+    }).catch(fail);
+  }
+  // "*.jpg", "IMG_*; *.png": the items whose names match, selected (letter case doesn't matter)
+  function selectPattern(i) {
+    var t = tabOf(panes[i]);
+    if (!viewOf(t).length) { return; }
+    ask("Select by pattern", "Names like", S.selPat || "*.", "* stands for anything and ? for any one letter. Put ; between several, like *.jpg; *.png").then(function (v) {
+      v = (v || "").trim();
+      if (!v) { return; }
+      S.selPat = v; save();
+      var res = v.split(/\s*[;,]\s*/).filter(Boolean).map(function (g) {
+        return new RegExp("^" + g.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i");
+      });
+      var hit = viewOf(t).filter(function (e) { return res.some(function (r) { return r.test(e.n); }); });
+      t.sel = new Set(hit.map(function (e) { return e.p; }));
+      t.focus = hit.length ? viewOf(t).indexOf(hit[0]) : -1; t.anchor = t.focus;
+      paintList(i); paintStatus(i); paintPreview();
+      toast(hit.length ? "Selected " + plural(hit.length, "item") + "." : "Nothing here matches " + v + ".", { bad: !hit.length });
+    });
+  }
+  function invertSel(i) {
+    var t = tabOf(panes[i]), next = new Set();
+    viewOf(t).forEach(function (e) { if (!t.sel.has(e.p)) { next.add(e.p); } });
+    t.sel = next; paintList(i); paintStatus(i); paintPreview();
   }
   function startRename(t, name) {
     if (zipBlocked(t)) { return; }
@@ -4050,6 +4110,12 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       }
       items.push("-");
       items.push({ label: sel.length > 1 ? "Rename together\u2026" : "Rename", icon: "rename", key: sel.length > 1 ? "Ctrl+Shift+R" : "F2", run: function () { startRename(t); } });
+      if (!inZip(t)) { items.push({ label: "Duplicate", icon: "copy", key: "Ctrl+Shift+D", run: function () { duplicateItems(t); } }); }
+      if (LINUX && !inZip(t)) { items.push({ label: sel.length > 1 ? "Create links" : "Create a link", icon: "link", run: function () { makeLinks(t); } }); }
+      if (LINUX && !inZip(t) && sel.every(function (e) { return !e.d; })) {
+        var runs = sel.every(function (e) { return /x/.test(e.a || ""); });
+        items.push({ label: runs ? "Don't run as a program" : "Allow running as a program", icon: "play", run: function () { setRunnable(t, !runs); } });
+      }
       if (sel.some(function (e) { return e.d; })) { items.push({ label: "Folder sizes", icon: "pie", run: function () { folderSizes(t); } }); }
       items.push({ label: "Add to a zip\u2026", icon: "copies", run: function () { zipItems(t); } });
       items.push("-");
@@ -4061,6 +4127,9 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (sel.every(function (e) { return e.d; }) && !inZip(t)) { S.groups.forEach(function (gr, k) { items.push({ label: "Add to " + gr.name, icon: "plus", run: function () { addToGroup(k, sel.map(function (e) { return e.p; })); } }); }); }
       items.push({ label: "Delete", icon: "trash", key: "Del", danger: true, run: function () { deleteItems(t, false); } });
       items.push("-");
+      items.push({ label: "Select by pattern\u2026", icon: "filter", key: "Ctrl+S", run: function () { selectPattern(i); } });
+      items.push({ label: "Invert selection", icon: "check", key: "Ctrl+Shift+I", run: function () { invertSel(i); } });
+      items.push("-");
       items.push({ label: "Properties", icon: "info", key: "Alt+Enter", run: function () { showProps(sel.map(function (e) { return e.p; })); } });
     } else {
       var can = !!t.path && t.mode === "folder" && !/^\\\\[^\\]+$/.test(t.path) && !inZip(t);
@@ -4070,6 +4139,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       items.push("-");
       items.push({ label: "Refresh", icon: "refresh", key: "F5", run: function () { refresh(t); } });
       items.push({ label: "Select all", icon: "check", key: "Ctrl+A", run: function () { selectAll(i); } });
+      items.push({ label: "Select by pattern\u2026", icon: "filter", key: "Ctrl+S", disabled: !viewOf(t).length, run: function () { selectPattern(i); } });
       items.push({ label: "Folder sizes", icon: "pie", disabled: !can, run: function () { folderSizes(t); } });
       items.push("-");
       items.push({ label: "Who has access to this folder", icon: "home", disabled: !can, run: function () { accessDialog(t.path); } });
@@ -4337,8 +4407,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (!e) { ev.preventDefault(); return; }
       if (!t.sel.has(e.p)) { t.sel = new Set([e.p]); paintList(i); }
       drag = { paths: selPaths(t), from: i };
-      if (!LINUX) {
-        // on Windows the drag is the window's own, carrying the files themselves, so it can be dropped in
+      if (!LINUX || MAC) {
+        // on Windows and macOS the drag is the window's own, carrying the files themselves, so it can be dropped in
         // Explorer, an email or any other app; a drop back here still finds them in drag
         ev.preventDefault();
         t.pendingSingle = null;
@@ -4348,6 +4418,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       }
       ev.dataTransfer.effectAllowed = "copyMove";
       ev.dataTransfer.setData("text/plain", drag.paths.join("\r\n"));
+      // as file:// addresses too, the way Linux apps take files: a drop in a browser, a chat or another file manager
+      ev.dataTransfer.setData("text/uri-list", drag.paths.map(fileUri).join("\r\n") + "\r\n");
       var ghost = D.createElement("div"); ghost.className = "dragtip"; ghost.textContent = drag.paths.length === 1 ? baseName(drag.paths[0]) : plural(drag.paths.length, "item");
       ghost.style.top = "-100px"; D.body.appendChild(ghost); ev.dataTransfer.setDragImage(ghost, -12, -6); setTimeout(function () { ghost.remove(); }, 0);
     });
@@ -4371,17 +4443,21 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (!target) { return; }
       ev.preventDefault();
       if (drag) { transfer(drag.paths, target.path, dropEffect(drag.paths, target.path, ev)); drag = null; return; }
-      // on Linux, files dragged in from the file manager come as file:// addresses
-      var uris = LINUX ? (ev.dataTransfer.getData("text/uri-list") || "").split(/\r?\n/).filter(function (u) { return /^file:\/\//.test(u); }) : [];
-      if (uris.length) { transfer(uris.map(function (u) { return decodeURIComponent(u.replace(/^file:\/\/[^\/]*/, "")); }), target.path, false); return; }
       dropFiles(ev, target.path);
     });
   }
-  // files dropped in from another app (Explorer, the desktop...): copied, or moved with Shift as Explorer does
+  function hasFiles(ev) { var ty = ev.dataTransfer && ev.dataTransfer.types; return !!ty && (Array.prototype.indexOf.call(ty, "Files") !== -1 || Array.prototype.indexOf.call(ty, "text/uri-list") !== -1); }
+  function fileUri(p) { return "file://" + p.split("/").map(encodeURIComponent).join("/"); }
+  // files dropped in from another app (Explorer, Finder, the desktop, a browser's downloads...): copied, or moved with Shift
   function dropFiles(ev, dest) {
-    if (!ev.dataTransfer.files || !ev.dataTransfer.files.length) { return; }
     var move = ev.shiftKey && !ev.ctrlKey;
-    apiFiles("dropped", {}, Array.prototype.slice.call(ev.dataTransfer.files)).then(function (r) {
+    // on Linux they come as file:// addresses
+    var uris = LINUX && !MAC ? (ev.dataTransfer.getData("text/uri-list") || "").split(/\r?\n/).filter(function (u) { return /^file:\/\//.test(u); }) : [];
+    if (uris.length) { transfer(uris.map(function (u) { return decodeURIComponent(u.replace(/^file:\/\/[^\/]*/, "")); }), dest, move); return; }
+    if (!ev.dataTransfer.files || !ev.dataTransfer.files.length) { return; }
+    // on macOS the window saw where they came from; the page only has their names
+    var files = Array.prototype.slice.call(ev.dataTransfer.files);
+    (MAC ? api("dropped", { names: files.map(function (f) { return f.name; }) }) : apiFiles("dropped", {}, files)).then(function (r) {
       if (r && r.paths && r.paths.length) { transfer(r.paths, dest, move); } else { toast("Those files could not be read from the drop.", { bad: true }); }
     }).catch(fail);
   }
@@ -4409,7 +4485,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   // dropping onto the side bar (favourites, drives, places), tabs and crumbs
   D.addEventListener("dragover", function (ev) {
     var s = ev.target.closest && ev.target.closest(".sitem[data-go], .mi[data-go], .tab[data-t], .crumb[data-c], .side .sgroup");
-    if (!s || !drag && !(ev.dataTransfer.types && Array.prototype.indexOf.call(ev.dataTransfer.types, "Files") !== -1)) { return; }
+    if (!s || !drag && !hasFiles(ev)) { return; }
     var dest = dropDest(s);
     if (dest === undefined) { return; }
     clearDrop();
@@ -4435,7 +4511,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   });
   // files over a part of the window that takes no drop: refused, so the window doesn't go to the file instead
   W.addEventListener("dragover", function (ev) {
-    if (ev.defaultPrevented || !(ev.dataTransfer.types && Array.prototype.indexOf.call(ev.dataTransfer.types, "Files") !== -1)) { return; }
+    if (ev.defaultPrevented || !hasFiles(ev)) { return; }
     ev.preventDefault(); ev.dataTransfer.dropEffect = "none";
   });
   W.addEventListener("drop", function (ev) { if (!ev.defaultPrevented) { ev.preventDefault(); } });
@@ -4467,13 +4543,29 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     openPath(t, path, { replace: true });
     paintPane(i); setActive(i); paintSide(); paintPreview(); save();
   }
+  var closedTabs = [];   // the tabs closed lately, newest last: Ctrl+Shift+T opens them again
   function closeTab(i, k) {
-    var p = panes[i];
+    var p = panes[i], ct = p.tabs[k];
+    if (ct && ct.path && !PICK) {
+      closedTabs.push({ pane: i, at: k, path: ct.path, hist: ct.hist.slice(), hi: ct.hi, view: ct.view, sort: { key: ct.sort.key, dir: ct.sort.dir } });
+      if (closedTabs.length > 25) { closedTabs.shift(); }
+    }
     stopJobs(p.tabs[k]);
     if (p.tabs.length === 1) { var t0 = p.tabs[0]; openPath(t0, "", {}); return; }
     p.tabs.splice(k, 1);
     if (p.active >= p.tabs.length) { p.active = p.tabs.length - 1; } else if (k < p.active) { p.active--; }
     paintPane(i); paintSide(); pvShown = ""; paintPreview(); watchOpen(); save(); setTitle();
+  }
+  function reopenTab() {
+    var c = closedTabs.pop();
+    if (!c) { toast("There's no closed tab to open again."); return; }
+    var i = panes[c.pane] ? c.pane : activePane, p = panes[i];
+    var t = newTabState(c.path);
+    t.hist = c.hist; t.hi = c.hi; t.view = c.view; t.sort = c.sort;
+    var at = Math.min(c.at, p.tabs.length);
+    p.tabs.splice(at, 0, t); p.active = at;
+    openPath(t, c.path, { replace: true });
+    paintPane(i); setActive(i); paintSide(); paintPreview(); save();
   }
   function activateTab(i, k) {
     var p = panes[i];
@@ -4506,6 +4598,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (ctrl && (k === "=" || k === "+")) { ev.preventDefault(); setZoom(zoomLvl + 0.05); return; }
     if (ctrl && (k === "-" || k === "_")) { ev.preventDefault(); setZoom(zoomLvl - 0.05); return; }
     if (ctrl && k === "0") { ev.preventDefault(); setZoom(1.15); return; }
+    if (ctrl && ev.shiftKey && (k === "t" || k === "T")) { ev.preventDefault(); reopenTab(); return; }
     if (ctrl && (k === "t" || k === "T")) { ev.preventDefault(); addTab(i, t.path); return; }
     if (ctrl && (k === "w" || k === "W")) { ev.preventDefault(); closeTab(i, p.active); return; }
     if (ctrl && k === "Tab") { ev.preventDefault(); activateTab(i, (p.active + (ev.shiftKey ? p.tabs.length - 1 : 1)) % p.tabs.length); return; }
@@ -4516,6 +4609,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (ctrl && !ev.shiftKey && (k === "p" || k === "P")) { ev.preventDefault(); togglePreview(); return; }
     if (ctrl && (k === "b" || k === "B")) { ev.preventDefault(); S.side = !S.side; layout(); return; }
     if (ctrl && (k === "h" || k === "H")) { ev.preventDefault(); toggleHidden(); return; }
+    if (ctrl && ev.shiftKey && (k === "d" || k === "D")) { ev.preventDefault(); if (!inField && selected(t).length) { duplicateItems(t); } return; }
     if (ctrl && (k === "d" || k === "D")) { ev.preventDefault(); toggleFav(t.path); return; }
     if (k === "F5") { ev.preventDefault(); refresh(t); loadDrives(); return; }
     if (ev.altKey && k === "ArrowLeft") { ev.preventDefault(); goBack(t); return; }
@@ -4545,6 +4639,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     else if (k === "F2") { ev.preventDefault(); startRename(t); }
     else if (k === "Delete") { ev.preventDefault(); deleteItems(t, ev.shiftKey); }
     else if (ctrl && (k === "a" || k === "A")) { ev.preventDefault(); selectAll(i); }
+    else if (ctrl && !ev.shiftKey && (k === "s" || k === "S")) { ev.preventDefault(); selectPattern(i); }
+    else if (ctrl && ev.shiftKey && (k === "i" || k === "I")) { ev.preventDefault(); invertSel(i); }
     else if (ctrl && ev.shiftKey && (k === "c" || k === "C")) { ev.preventDefault(); copyPath(t); }
     else if (ctrl && ev.shiftKey && (k === "m" || k === "M")) { ev.preventDefault(); toggleMill(); }
     else if (ctrl && (k === "c" || k === "C")) { ev.preventDefault(); copyItems(t, false); }
@@ -4566,6 +4662,9 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var list = [
       { t: "New tab", ic: "plus", k: "Ctrl+T", run: function () { addTab(i, t.path); } },
       { t: "Close tab", ic: "x", k: "Ctrl+W", run: function () { closeTab(i, curPane().active); } },
+      { t: "Open the closed tab again", ic: "back", k: "Ctrl+Shift+T", run: reopenTab },
+      { t: "Select by pattern\u2026", ic: "filter", k: "Ctrl+S", run: function () { selectPattern(i); } },
+      { t: "Invert selection", ic: "check", k: "Ctrl+Shift+I", run: function () { invertSel(i); } },
       { t: S.dual ? "One pane" : "Two panes side by side", ic: "columns", k: "Ctrl+\\", run: function () { S.dual = !S.dual; layout(); } },
       { t: S.preview ? "Hide the preview" : "Show the preview", ic: "panel", k: "Ctrl+P", run: togglePreview },
       { t: S.pvPos === "right" ? "Preview at the bottom" : "Preview on the right", ic: S.pvPos === "right" ? "panelb" : "panel", run: movePreview },
@@ -4608,7 +4707,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     S.favs.forEach(function (f) { go(f, baseName(f), "Favourite", "starf"); });
     S.groups.forEach(function (g) { g.items.forEach(function (f) { go(f, baseName(f), g.name, "folder"); }); });
     places.forEach(function (pl) { go(pl.path, pl.name, "Folder", PLACEICON[pl.name] || "folder"); });
-    drives.forEach(function (d) { go(d.path, LINUX ? driveName(d) : d.path.slice(0, 2) + (d.label ? " " + d.label : ""), "Drive", d.type === "Network" ? "net" : "drive"); });
+    drives.forEach(function (d) { go(d.path, LINUX ? driveName(d) : d.path.slice(0, 2) + (d.label ? " " + d.label : ""), d.phone ? "Phone" : "Drive", driveIcon(d)); });
     if (LINUX) { list = list.filter(function (c) { return !c.t || !WINONLY.test(c.t) || /^Connect to/.test(c.t); }); }
     if (LINUX && atlasDefault) { list = list.filter(function (c) { return !/Windows Explorer/.test(c.t || ""); }); }
     else { list = list.filter(function (c) { return !/the Trash$/.test(c.t || ""); }); }
