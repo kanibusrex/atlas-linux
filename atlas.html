@@ -415,6 +415,7 @@ body.pvright .preview:not(.dock) { width: auto; position: relative; }
 .preview:not(.dock) .pv-kind { order: 2; }
 .preview:not(.dock) .pv-acts { order: 3; }
 .preview:not(.dock) .pv-stage { order: 4; flex: none; }
+.preview:not(.dock) .pv-body > .pv-facts { order: 5; flex: none; }
 .preview:not(.dock) #pvFacts { order: 5; flex: none; max-height: 120px; overflow: auto; }
 .preview:not(.dock) .pv-stage.tall, .preview:not(.dock) .pv-stage.fill { flex: 1 1 0; min-height: 240px; position: relative; overflow: hidden; }
 .preview:not(.dock) .pv-stage.tall > * { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; }
@@ -3421,7 +3422,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
         var files = 0, bytes = 0, dirs = 0;
         t.entries.forEach(function (e) { if (e.d) { dirs++; } else { files++; bytes += e.s; } });
         body.innerHTML = "<div class='pv-stage'><span class='fi'>" + folderSvg() + "</span></div><div class='pv-name'>" + esc(baseName(t.path)) + "</div><div class='pv-kind'>" + plural(dirs, "folder") + ", " + plural(files, "file") + " (" + fmtSize(bytes) + " not counting folders)</div>" +
-          "<div class='pv-acts'><button class='btn sm' data-pv='space'>" + svg("pie") + "What's taking up space</button><button class='btn sm' data-pv='copypath'>" + svg("link") + "Copy path</button></div>" + factRows([["Location", t.path]]);
+          "<div class='pv-acts'><button class='btn sm' data-pv='space'>" + svg("pie") + "What's taking up space</button><button class='btn sm' data-pv='copypath'>" + svg("link") + "Copy path</button></div><div id='pvFacts'>" + factRows([["Location", t.path]]) + "</div>";
       } else { body.innerHTML = "<div class='pv-none'>Select a file to see it here.</div>"; }
       return;
     }
