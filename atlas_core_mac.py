@@ -421,4 +421,32 @@ OPS = {
 }
 
 # the Windows Atlas's own (mapped drives, a PC's shares, Active Directory), and emptying the Trash (Finder's)
+def recent_files():
+    """Files opened lately (in the last 30 days), as Spotlight knows them, with when each was last used."""
+    import datetime
+    try:
+        r = subprocess.run(["/usr/bin/mdfind", "-onlyin", os.path.expanduser("~"), "kMDItemLastUsedDate >= $time.today(-30) && kMDItemContentTypeTree != public.folder"],
+                           capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    paths = [p for p in r.stdout.splitlines() if p and "/Library/" not in p and not p.endswith(".app")][:400]
+    if not paths:
+        return []
+    try:
+        d = subprocess.run(["/usr/bin/mdls", "-name", "kMDItemLastUsedDate", "-raw"] + paths, capture_output=True, text=True, timeout=30)
+        dates = d.stdout.split("\0")
+    except (OSError, subprocess.TimeoutExpired):
+        dates = []
+    out = []
+    for k, p in enumerate(paths):
+        when = 0
+        v = dates[k].strip() if k < len(dates) else ""
+        try:
+            when = datetime.datetime.strptime(v, "%Y-%m-%d %H:%M:%S %z").timestamp()
+        except ValueError:
+            pass
+        out.append((p, when))
+    return out
+
+
 NOT_HERE = {"shares", "access", "members", "letters", "mapdrive", "unmapdrive", "emptytrash"}

@@ -147,7 +147,7 @@ class Desktop(Worker):
     # ---- Starting up: before the window, and once it is made ------------------------------------------
     def start(self):
         self.start_worker()
-        if not self.host.pick:
+        if not self.host.pick and not self.host.extra:
             threading.Thread(target=self.listen, daemon=True).start()
         # pywebview notes where files dropped in from Finder are only while something listens for drops
         from webview.dom import _dnd_state

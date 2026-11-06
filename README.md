@@ -9,13 +9,16 @@ Atlas began as a Windows file explorer (PowerShell + WebView2). This is its Linu
 ## Features
 
 ### Finding your way
-- **Tabs and two panes** side by side (Ctrl+\\), with each tab's history. Ctrl+Shift+T opens a closed tab again.
+- **Tabs and two panes** side by side (Ctrl+\\), with each tab's history. Ctrl+Shift+T opens a closed tab again; drag tabs to reorder them, right-click one for more.
+- **More windows**: Ctrl+N, "Open in a new window", or drag a tab out of the window.
 - **Folder columns** above the list, so you can see and jump anywhere along the path.
 - **Details or tiles view**, sorting by name, type, age, date or size, and quick filters by kind, age and size.
-- **Search** below the current folder (Enter in the filter box), with wildcards.
+- **Search** below the current folder (Enter in the filter box), with wildcards — by name, or **inside files**: text, code, PDFs, Word, Excel, PowerPoint, OpenDocument and EPUB (fast with `ripgrep`; PDFs need `poppler`). Each match shows the words around it.
+- **Recent**: the files you opened lately, in Atlas or any other app, newest first.
 - **Go to (Ctrl+K)**: a command palette for every folder, drive, tab and action.
 - **Favourites and groups** in the side bar, and your recent folders.
 - **What's taking up space**: folder sizes, largest first.
+- **Find duplicate files**: the same contents in more than one place, compared byte for byte, with the copies to let go of ticked for you.
 
 ### Files
 - Copy and move with a queue you can pause, with progress and speed.
@@ -27,6 +30,7 @@ Atlas began as a Windows file explorer (PowerShell + WebView2). This is its Linu
 - **Undo (Ctrl+Z)** for moves, copies, renames, new items, deletions and restores.
 - **Properties**: owner, group, and read / change / run permissions, for one item or many, with "also change everything inside".
 - **What's using it**: which programs have a file, folder or drive open, with a button to end them.
+- **As administrator** (Linux): when your account isn't allowed to delete, rename, paste, make or change something, Atlas offers to do it through `pkexec`, after the password.
 - File hashes, folder comparison, zip creation, and "Set as wallpaper" for images (Omarchy).
 
 ![The Properties dialog: owner, group, and read, change and run permissions](docs/screenshots/properties.png)
@@ -34,6 +38,7 @@ Atlas began as a Windows file explorer (PowerShell + WebView2). This is its Linu
 ### Previews
 - Photos, video thumbnails (ffmpegthumbnailer) and the first page of PDFs (poppler), in tiles and the preview pane.
 - Video and audio playback, Office documents' text, Markdown rendered, and code in colour.
+- The facts that matter for each kind: a photo's size, camera, settings and where it was taken (with a map); a video's or song's length, picture, sound and tags (`ffmpeg`); a PDF's pages, title and author; an Office file's author and page or word count.
 
 | | |
 |---|---|

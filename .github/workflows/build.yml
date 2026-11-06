@@ -48,6 +48,7 @@ jobs:
         run: >
           pyinstaller --noconfirm --windowed --name Atlas --icon atlas.ico
           --add-data "atlas.html;." --add-data "AtlasCore.ps1;." --add-data "atlas.ico;."
+          --hidden-import atlas_find --hidden-import atlas_media
           --exclude-module atlas_linux --exclude-module atlas_core_linux --exclude-module gi
           --exclude-module atlas_mac --exclude-module atlas_core_mac
           atlas.py
@@ -105,6 +106,7 @@ jobs:
           pyinstaller --noconfirm --windowed --name Atlas --icon atlas.png
           --osx-bundle-identifier dev.atlas.Atlas
           --add-data "atlas.html:." --add-data "atlas.png:."
+          --hidden-import atlas_find --hidden-import atlas_media
           --exclude-module atlas_linux --exclude-module atlas_core_linux --exclude-module gi
           --exclude-module atlas_windows --exclude-module atlas_core_windows
           atlas.py

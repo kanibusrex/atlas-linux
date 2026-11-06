@@ -20,6 +20,15 @@ def run(op, **a):
     return core.run(op, a, core.State())
 
 
+def run_events(op, **a):
+    st = core.State()
+    r = core.run(op, a, st)
+    evs = []
+    while not st.events.empty():
+        evs.append(st.events.get())
+    return r, evs
+
+
 def check(what, ok, got=None):
     print(("ok    " if ok else "FAIL  ") + what + ("" if ok else "  ->  " + json.dumps(got, default=str)[:400]))
     if not ok:
@@ -55,6 +64,49 @@ try:
 
     r = run("search", root=a, query="two", options={})
     check("search", r.get("found") == 1, r)
+    import atlas_find
+    found = {}
+    for label, use_rg in (("ripgrep", True), ("Python", False)):
+        if label == "ripgrep" and not atlas_find.rg_path():
+            continue
+        keep = atlas_find.rg_path
+        if not use_rg:
+            atlas_find.rg_path = lambda: None
+        try:
+            r, evs = run_events("search", root=a, query="HELLO", options={"content": True})
+        finally:
+            atlas_find.rg_path = keep
+        items = [e for ev in evs for e in ev.get("items", [])]
+        found[label] = sorted(os.path.basename(e["p"]) for e in items)
+        check("search inside files (%s)" % label, found[label] == ["one.txt"] and items[0].get("hit") == "hello" and items[0].get("ln") == 1, items)
+    r, evs = run_events("search", root=a, query="# hi", options={"content": True, "ext": "md"})
+    check("search inside files, with an extension", [os.path.basename(e["p"]) for ev in evs for e in ev.get("items", [])] == ["two.md"], evs)
+
+    for n in ("dup1.bin", os.path.join("sub", "dup2.bin")):
+        with open(os.path.join(a, n), "wb") as f:
+            f.write(b"same" * 50000)
+    with open(os.path.join(a, "near.bin"), "wb") as f:
+        f.write(b"same" * 49999 + b"diff")
+    r = run("dupes", root=a, options={})
+    g = r.get("groups") or []
+    check("duplicate files", len(g) == 1 and sorted(os.path.basename(x["p"]) for x in g[0]["files"]) == ["dup1.bin", "dup2.bin"] and r.get("wasted") == 200000, r)
+    for n in ("dup1.bin", os.path.join("sub", "dup2.bin"), "near.bin"):
+        os.unlink(os.path.join(a, n))
+
+    r = run("recent")
+    check("recent files", isinstance(r.get("items"), list), r)
+    show("recent files", lambda: [e["n"] for e in r["items"][:5]])
+
+    import struct
+    import zlib
+    png = os.path.join(a, "pic.png")
+    with open(png, "wb") as f:   # a 3 x 2 picture
+        ihdr = struct.pack(">IIBBBBB", 3, 2, 8, 2, 0, 0, 0)
+        f.write(b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + ihdr + struct.pack(">I", zlib.crc32(b"IHDR" + ihdr)))
+    r = run("media", path=png)
+    check("a picture's size", ["Picture", "3 \u00D7 2"] in r.get("rows", []), r)
+    os.unlink(png)
+
     r = run("sizes", paths=[a])
     check("folder size", r["sizes"][0]["bytes"] == 1010 and r["sizes"][0]["files"] == 3, r)
 

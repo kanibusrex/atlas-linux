@@ -398,4 +398,24 @@ OPS = {
 }
 
 # Linux's own: its Trash, Samba's smbclient, permission bits, ending a program, Omarchy's wallpaper
+def recent_files():
+    """Files opened lately: the shortcuts Windows keeps in the Recent folder, and what they point to."""
+    rec = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Windows", "Recent")
+    try:
+        lnks = [os.path.join(rec, n) for n in os.listdir(rec) if n.lower().endswith(".lnk")]
+    except OSError:
+        return []
+    lnks = sorted(lnks, key=lambda p: os.path.getmtime(p) if os.path.exists(p) else 0, reverse=True)[:300]
+    if not lnks:
+        return []
+    script = "$s = New-Object -ComObject WScript.Shell; $input | ForEach-Object { try { $s.CreateShortcut($_).TargetPath } catch { '' } }"
+    try:
+        r = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script], input="\n".join(lnks),
+                           capture_output=True, text=True, timeout=30, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    targets = r.stdout.splitlines()
+    return [(t.strip(), os.path.getmtime(l)) for l, t in zip(lnks, targets) if t.strip()]
+
+
 NOT_HERE = {"restore", "emptytrash", "smbshares", "perms", "chperm", "endprogram", "wallpaper", "mklink"}

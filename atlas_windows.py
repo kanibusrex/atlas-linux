@@ -122,7 +122,7 @@ class Desktop(Worker):
     # ---- Starting up: before the window, and once it is made ------------------------------------------
     def start(self):
         self.start_worker()
-        if not self.host.pick:
+        if not self.host.pick and not self.host.extra:
             threading.Thread(target=self.listen, daemon=True).start()
         self.every(2000, self.check_drives)
 
@@ -263,6 +263,10 @@ class Desktop(Worker):
         if op == "open":
             for p in m.get("paths") or []:
                 os.startfile(str(p))
+                try:
+                    shell32.SHAddToRecentDocs(3, ctypes.c_wchar_p(str(p)))   # SHARD_PATHW: so it's in Recent
+                except Exception:
+                    pass
             reply(rid, True)
         elif op == "openwith":
             subprocess.Popen("rundll32.exe shell32.dll,OpenAs_RunDLL " + str(m.get("path")))

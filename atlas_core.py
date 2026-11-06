@@ -224,6 +224,8 @@ def search(root, query, options, state):
     recurse = options.get("recurse") is not False
     hidden = options.get("hidden") is True
     qlow = q.lower()
+    if options.get("content") and q:
+        return search_inside(root, q, state, mx, exts, typ, after, min_s, max_s, recurse, hidden)
 
     found = scanned = 0
     batch = []
@@ -287,6 +289,211 @@ def search(root, query, options, state):
     if batch:
         send_event(state, {"kind": "search", "items": batch, "scanned": scanned, "dir": ""})
     return {"found": found, "scanned": scanned, "capped": found >= mx, "cancelled": bool(state and state.cancel)}
+
+
+def search_inside(root, q, state, mx, exts, typ, after, min_s, max_s, recurse, hidden):
+    """The files below root with q in them (see atlas_find.py): each found one carries ln, the line it is
+    on, and hit, the words around it."""
+    import atlas_find as find
+    pat = find.pattern(q)
+    found = scanned = 0
+    batch = []
+    last = [time.monotonic()]
+    seen = set()
+
+    def keep(path, ln, snip):
+        nonlocal found
+        if path in seen:
+            return
+        try:
+            st = os.lstat(path)
+        except OSError:
+            return
+        e = to_entry(os.path.basename(path), path, st)
+        if e["d"] or (after > 0 and e["m"] < after) or (min_s >= 0 and e["s"] < min_s) or (max_s >= 0 and e["s"] > max_s):
+            return
+        seen.add(path)
+        e["p"], e["ln"], e["hit"] = path, ln, snip
+        batch.append(e)
+        found += 1
+
+    def send(d, force=False):
+        now = time.monotonic()
+        if batch and (force or len(batch) >= 50 or now - last[0] > 0.25) or now - last[0] > 0.5:
+            send_event(state, {"kind": "search", "items": batch[:], "scanned": scanned, "dir": d})
+            del batch[:]
+            last[0] = now
+
+    def cancelled():
+        return bool(state and state.cancel)
+
+    if typ != "folder":
+        rg = find.rg_path()
+        if rg:
+            text_exts = [x for x in exts if x not in find.DOCS]
+            if not exts or text_exts:
+                for p, ln, snip in find.rg_text(root, q, hidden, recurse, text_exts, state):
+                    if os.path.splitext(p)[1].lower() not in find.DOCS:
+                        keep(p, ln, snip)
+                    send(parent_of(p))
+                    if found >= mx or cancelled():
+                        break
+        # documents (and, with no ripgrep, everything) are read here
+        stack = [root]
+        while stack and found < mx and not cancelled():
+            d = stack.pop()
+            try:
+                items = children(d)
+            except OSError:
+                continue
+            for de in items:
+                if cancelled() or found >= mx:
+                    break
+                if not hidden and system.hidden_entry(de):
+                    continue
+                if is_dir_entry(de):
+                    if recurse and not de.is_symlink():
+                        stack.append(de.path)
+                    continue
+                scanned += 1
+                ext = os.path.splitext(de.name)[1].lower()
+                if (exts and ext not in exts) or (rg and ext not in find.DOCS):
+                    continue
+                try:
+                    size = de.stat().st_size
+                except OSError:
+                    continue
+                hit = find.hit_in(de.path, ext, pat, size)
+                if hit:
+                    keep(de.path, hit[0], hit[1])
+                send(d)
+            send(d)
+    send("", True)
+    return {"found": found, "scanned": scanned, "capped": found >= mx, "cancelled": cancelled(), "inside": True}
+
+
+def media_facts(path):
+    import atlas_media   # (a plain import, so PyInstaller packs it)
+    return atlas_media.facts(path)
+
+
+# ---- Recent files ------------------------------------------------------------------------------------
+def recent(limit=300):
+    """The files opened lately (the system's own list: see recent_files in the system module), newest first:
+    entries with p, and u, when it was last used."""
+    best = {}
+    for p, used in system.recent_files():
+        if p and (p not in best or used > best[p]):
+            best[p] = used
+    out = []
+    for p, used in sorted(best.items(), key=lambda x: -x[1]):
+        try:
+            st = os.lstat(p)
+        except OSError:
+            continue   # gone since
+        e = to_entry(os.path.basename(p), p, st)
+        if e["d"]:
+            continue
+        e["p"], e["u"] = p, epoch_ms(used)
+        out.append(e)
+        if len(out) >= limit:
+            break
+    return {"items": out}
+
+
+# ---- Duplicate files -------------------------------------------------------------------------------
+def duplicates(root, options, state):
+    """Files below root with the very same contents: alike in size first, then in a hash of their first 64 KB,
+    then of all of them (so only real look-alikes are read in full). Hard links to one file are one file.
+    Groups come biggest waste first: [{size, files: [{p, n, m}, ...]}]."""
+    options = options or {}
+    hidden = options.get("hidden") is True
+    min_s = max(1, int(options.get("minSize") or 1))
+    by_size, seen = {}, set()
+    scanned, last = 0, time.monotonic()
+    stack = [root]
+
+    def cancelled():
+        return bool(state and state.cancel)
+
+    while stack and not cancelled():
+        d = stack.pop()
+        try:
+            items = children(d)
+        except OSError:
+            continue
+        for de in items:
+            if not hidden and system.hidden_entry(de):
+                continue
+            try:
+                if de.is_symlink():
+                    continue
+                if de.is_dir(follow_symlinks=False):
+                    stack.append(de.path)
+                    continue
+                st = de.stat(follow_symlinks=False)
+            except OSError:
+                continue
+            if not stat.S_ISREG(st.st_mode) or st.st_size < min_s:
+                continue
+            ident = (st.st_dev, st.st_ino)
+            if st.st_ino and ident in seen:
+                continue
+            seen.add(ident)
+            scanned += 1
+            by_size.setdefault(st.st_size, []).append((de.path, epoch_ms(st.st_mtime)))
+        if time.monotonic() - last > 0.3:
+            send_event(state, {"kind": "dupes", "phase": "scan", "files": scanned, "dir": d})
+            last = time.monotonic()
+
+    def digest(path, limit):
+        h = hashlib.blake2b(digest_size=20)
+        with open(path, "rb") as f:
+            left = limit
+            while left and not cancelled():
+                buf = f.read(min(1 << 20, left))
+                if not buf:
+                    break
+                h.update(buf)
+                left -= len(buf)
+                done[0] += len(buf)
+                if time.monotonic() - last2[0] > 0.3:
+                    send_event(state, {"kind": "dupes", "phase": "compare", "files": scanned, "done": done[0], "total": total})
+                    last2[0] = time.monotonic()
+        return h.digest()
+
+    same = [(sz, fs) for sz, fs in by_size.items() if len(fs) > 1]
+    head = 64 << 10
+    total = sum(min(sz, head) * len(fs) + (sz * len(fs) if sz > head else 0) for sz, fs in same)
+    done, last2 = [0], [time.monotonic()]
+    groups = []
+    for sz, fs in same:
+        if cancelled():
+            break
+        firsts = {}
+        for p, m in fs:
+            try:
+                firsts.setdefault(digest(p, head), []).append((p, m))
+            except OSError:
+                pass
+        for alike in firsts.values():
+            if len(alike) < 2:
+                continue
+            if sz <= head:
+                full = {b"": alike}
+            else:
+                full = {}
+                for p, m in alike:
+                    try:
+                        full.setdefault(digest(p, sz), []).append((p, m))
+                    except OSError:
+                        pass
+            for g in full.values():
+                if len(g) > 1:
+                    groups.append({"size": sz, "files": [{"p": p, "n": os.path.basename(p), "m": m} for p, m in sorted(g, key=lambda x: x[1])]})
+    groups.sort(key=lambda g: -g["size"] * (len(g["files"]) - 1))
+    return {"groups": groups[:2000], "more": max(0, len(groups) - 2000), "files": scanned,
+            "wasted": sum(g["size"] * (len(g["files"]) - 1) for g in groups), "cancelled": cancelled()}
 
 
 # ---- Folder sizes --------------------------------------------------------------------------------
@@ -477,7 +684,8 @@ def remove_tree(p):
 
 # ---- Copying and moving ---------------------------------------------------------------------------
 def conflicts(sources, dest):
-    return {"conflicts": [base_of(str(s)) for s in sources or [] if exists(join(dest, base_of(str(s))))]}
+    return {"conflicts": [base_of(str(s)) for s in sources or [] if exists(join(dest, base_of(str(s))))],
+            "writable": os.access(dest, os.W_OK)}
 
 
 # ---- Copies to a network share: paced, and picked up again when it drops --------------------------------
@@ -1371,6 +1579,9 @@ OPS = {
     "sizes": lambda a, state: sizes(a.get("paths"), state),
     "children": lambda a, state: children_sizes(str(a.get("path") or ""), state),
     "rename": lambda a, state: rename_items(a.get("items")),
+    "recent": lambda a, state: recent(),
+    "media": lambda a, state: media_facts(str(a.get("path") or "")),
+    "dupes": lambda a, state: duplicates(str(a.get("root") or ""), a.get("options"), state),
     "mklink": lambda a, state: make_links(a.get("paths"), str(a.get("dir") or "")),
     "mkdir": lambda a, state: new_folder(str(a.get("dir")), str(a.get("name"))),
     "newfile": lambda a, state: new_file(str(a.get("dir")), str(a.get("name"))),

@@ -164,7 +164,7 @@ class Desktop:
 
     # ---- Starting up: before the window, and once it is made ------------------------------------------
     def start(self):
-        if not self.host.pick:
+        if not self.host.pick and not self.host.extra:
             # only the Atlas that is running answers; see hand_over
             Gio.bus_own_name(Gio.BusType.SESSION, APP_ID, Gio.BusNameOwnerFlags.NONE,
                              lambda conn, _n: self.register(conn, ATLAS_XML, ATLAS_PATH, self.on_atlas_call), None, None)
@@ -292,7 +292,13 @@ class Desktop:
         reply = self.host.reply
         if op == "open":
             for p in m.get("paths") or []:
-                Gio.AppInfo.launch_default_for_uri(Gio.File.new_for_path(str(p)).get_uri(), None)
+                uri = Gio.File.new_for_path(str(p)).get_uri()
+                Gio.AppInfo.launch_default_for_uri(uri, None)
+                if os.path.isfile(str(p)):
+                    try:
+                        Gtk.RecentManager.get_default().add_item(uri)   # so it's in Recent, here and in other apps
+                    except Exception:
+                        pass
             reply(rid, True)
         elif op == "openwith":
             self.open_with(rid, str(m.get("path")))
@@ -343,6 +349,17 @@ class Desktop:
             if u.startswith(("https://", "http://127.0.0.1:53682/")):
                 Gio.AppInfo.launch_default_for_uri(u, None)
             reply(rid, True)
+        elif op == "admin":
+            # pkexec waits for a password: not on the thread the other requests take turns on
+            import atlas_admin
+
+            def go():
+                try:
+                    r = atlas_admin.run(str(m.get("action") or ""), m, m.get("password"))
+                except ValueError as e:
+                    r = {"error": str(e)}
+                reply(rid, r)
+            threading.Thread(target=go, daemon=True).start()
         elif op == "omarchy":
             reply(rid, omarchy_palette())
         else:

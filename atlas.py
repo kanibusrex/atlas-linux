@@ -26,6 +26,7 @@ import re
 import secrets
 import shutil
 import socketserver
+import subprocess
 import sys
 import threading
 import time
@@ -59,7 +60,7 @@ else:
 
 import webview  # noqa: E402
 
-VERSION = "1.3.4"
+VERSION = "1.4.0"
 DATA_DIR = desktop.DATA_DIR
 PAGE = os.path.join(HERE, "atlas.html")
 BG = "#1a1b1e"
@@ -174,7 +175,9 @@ class Api:
 
 
 class Host:
-    def __init__(self, start, pick=None):
+    def __init__(self, start, pick=None, extra=False):
+        # a second window (Ctrl+N, or a tab dragged out): it leaves the first one's saved tabs and window alone
+        self.extra = extra
         # choosing files for another app: what it asked for (mode, filters, folder, name...); the answer goes to stdout.
         # It starts in the folder the app gave, or the one last picked from, or home.
         self.pick = pick
@@ -243,10 +246,40 @@ class Host:
                 pass
         return None
 
+    def keep_session(self, v):
+        """A second window's saved choices, with the first window's tabs in them instead of its own."""
+        try:
+            mine = json.loads(v)
+            with open(PAGE_STATE, encoding="utf-8") as f:
+                theirs = json.load(f)
+            if isinstance(mine, dict) and isinstance(theirs, dict):
+                mine["session"] = theirs.get("session")
+                return json.dumps(mine)
+        except (OSError, ValueError):
+            pass
+        return v
+
+    def new_window(self, path):
+        """Starts another Atlas window, on path: its own process, which outlives this one."""
+        if os.environ.get("APPIMAGE") and os.path.isfile(os.environ["APPIMAGE"]):
+            cmd = [os.environ["APPIMAGE"]]   # its own mount of the AppImage, which stays while it runs
+        elif getattr(sys, "frozen", False):
+            cmd = [sys.executable]
+        else:
+            cmd = [sys.executable, os.path.abspath(__file__)]
+        cmd += ["--window", path or os.path.expanduser("~")]
+        if sys.platform == "win32":
+            subprocess.Popen(cmd, creationflags=0x00000008 | 0x00000200, close_fds=True)   # DETACHED_PROCESS, NEW_PROCESS_GROUP
+        else:
+            subprocess.Popen(cmd, start_new_session=True, close_fds=True, stdin=subprocess.DEVNULL)
+        return True
+
     def run(self):
         q = "?path=" + urllib.parse.quote(os.path.abspath(self.start_path), safe="") if self.start_path else ""
         if self.start_path and self.start_select:
             q += "&select=" + urllib.parse.quote(self.start_select, safe="")
+        if self.extra:
+            q += ("&" if q else "?") + "extra=1"
         if self.pick:
             q += ("&" if q else "?") + "pick=" + urllib.parse.quote(json.dumps(self.pick), safe="")
         if self.pick:
@@ -353,6 +386,8 @@ class Host:
             # the page's saved choices (a picker keeps none of its own)
             v = m.get("value")
             if isinstance(v, str) and not self.pick:
+                if self.extra:
+                    v = self.keep_session(v)
                 self.saved = v
                 try:
                     write_file(PAGE_STATE, v)
@@ -419,6 +454,8 @@ class Host:
                         pass
             self.reply(rid, True)
             return self.window.destroy()
+        if op == "newwindow":
+            return self.reply(rid, self.new_window(str(m.get("path") or "")))
         if op == "title":
             if self.pick:
                 return self.reply(rid, True)
@@ -435,7 +472,7 @@ class Host:
             for msg in self.pending_open:
                 self.send(msg)
             self.pending_open = []
-            if not self.pick and self.prefs.get("UpdateCheck", True) and time.time() - float(self.prefs.get("UpdateLast") or 0) > 86400:
+            if not self.pick and not self.extra and self.prefs.get("UpdateCheck", True) and time.time() - float(self.prefs.get("UpdateLast") or 0) > 86400:
                 threading.Thread(target=self.update_check, args=(0,), daemon=True).start()
             return self.send_copies(True)
         if op == "win":
@@ -628,8 +665,8 @@ class Host:
             if not maxed:
                 self.prefs["W"], self.prefs["H"] = w, h
             self.prefs["Max"] = maxed
-        # a picker leaves Atlas's saved window size and zoom as they were
-        if not self.pick:
+        # a picker (and a second window) leaves Atlas's saved window size and zoom as they were
+        if not self.pick and not self.extra:
             try:
                 write_file(self.prefs_path, json.dumps(self.prefs))
             except OSError:
@@ -795,6 +832,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 def main():
     pick = None
     args = sys.argv[1:]
+    # --window FOLDER: another window, beside the Atlas already open
+    extra = args[:1] == ["--window"]
+    if extra:
+        args = args[1:2]
     if len(args) > 1 and args[0] == "--pick":
         try:
             pick = json.loads(args[1])
@@ -814,14 +855,14 @@ def main():
     # Atlas runs once per person: opened again (from the launcher, or with a folder), it passes the folder
     # to the window already open, which comes to the front and opens the folder in a new tab.
     # A picker is a window of its own, apart from the Atlas that may be open.
-    if not pick and desktop.hand_over(path):
+    if not pick and not extra and desktop.hand_over(path):
         return
     # the window's app id, as Hyprland and the launcher see it (a picker has its own, so it can float)
     if desktop.SYSTEM == "linux":
         from gi.repository import GLib
         GLib.set_prgname(desktop.APP_ID + ".Picker" if pick else desktop.APP_ID)
         GLib.set_application_name("Atlas")
-    Host(path, pick).run()
+    Host(path, pick, extra).run()
 
 
 if __name__ == "__main__":

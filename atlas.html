@@ -276,6 +276,8 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .row .nm span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .nm .hid { opacity: .55; }
 .row .dim { color: var(--muted); }
+.row .hitx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .hitx mark, .pv-facts mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text); border-radius: 3px; padding: 0 1px; }
 .row .ell { font-size: 12px; color: var(--muted); }
 .row input.ren { width: 100%; height: 24px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--accent); background: var(--bg); outline: 0; }
 .fi { width: 18px; height: 18px; flex: none; display: grid; place-items: center; }
@@ -497,6 +499,19 @@ body.pvright .preview:not(.dock) { width: auto; position: relative; }
 .frow .fld { flex: 1; }
 .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2); border-radius: 9px; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); margin-bottom: 12px; flex-wrap: wrap; }
 .seg button { border: 0; background: transparent; padding: 5px 11px; border-radius: 7px; cursor: pointer; color: var(--text-2); font-size: 12.5px; }
+.dp-wait { display: flex; align-items: center; gap: 10px; padding: 18px 4px; color: var(--text-2); }
+.dp-wait .btn { margin-left: auto; }
+.dp-none { padding: 14px 4px; color: var(--text-2); }
+.dp-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12.5px; flex-wrap: wrap; }
+.dp-list { max-height: 52vh; overflow: auto; }
+.dp-g { padding: 6px 0 8px; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.dp-gh { font-size: 11.5px; color: var(--muted); padding: 0 4px 4px; }
+.dp-f { display: grid; grid-template-columns: 18px minmax(0, 1.2fr) minmax(0, 2fr) auto auto; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 6px; font-size: 12.5px; cursor: pointer; }
+.dp-f:hover { background: var(--surface-2); }
+.dp-f .nm, .dp-f .fo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-more { padding: 10px 4px; }
+.seg.sm { margin: 0 6px 0 0; padding: 2px; flex-wrap: nowrap; flex: none; }
+.seg.sm button { padding: 3px 9px; font-size: 12px; }
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
 .chk { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 0 0 10px; cursor: pointer; }
 .rtable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -1209,6 +1224,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   // choosing files for another app (atlas.py --pick): what it asked for; see "Choosing files" below
   var PICK = null;
   try { PICK = JSON.parse(new URLSearchParams(location.search).get("pick") || "null"); } catch (e) { }
+  var EXTRA = false;   // a second window: it starts with one tab, and keeps the first window's saved tabs as they were
+  try { EXTRA = new URLSearchParams(location.search).get("extra") === "1"; } catch (e) { }
 
   /* ---- Saved choices ----------------------------------------------------------------------------- */
   var KEY = "fileDesk.v1";
@@ -1620,15 +1637,33 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     }
   }
   function movePreview() { S.pvPos = S.pvPos === "right" ? "bottom" : "right"; if (!S.preview) { S.preview = true; } layout(); }
-  function setTitle() { var t = cur(); api("title", { text: t.mode === "search" ? "Search: " + t.search.query : baseName(t.path) }).catch(function () { }); }
+  function setTitle() { var t = cur(); api("title", { text: isRecent(t) ? "Recent" : t.mode === "search" ? "Search: " + t.search.query : baseName(t.path) }).catch(function () { }); }
 
   /* ---- Opening a folder ---------------------------------------------------------------------------- */
   function paneOfTab(t) { for (var i = 0; i < panes.length; i++) { if (panes[i] && panes[i].tabs.indexOf(t) !== -1) { return i; } } return -1; }
   function paintTab(t) { var i = paneOfTab(t); if (i >= 0 && tabOf(panes[i]) === t && panes[i].el && panes[i].el.isConnected) { paintPane(i); if (i === activePane) { paintSide(); paintPreview(); } } }
 
+  var RECENT = "recent:";   // the Recent place: the files opened lately (a list like search results)
+  function isRecent(t) { return t.mode === "search" && !!t.search && !!t.search.recent; }
+  function openRecent(t, o) {
+    o = o || {};
+    stopJobs(t);
+    if (!o.replace && !o.keep && !isRecent(t)) { t.hist = t.hist.slice(0, t.hi + 1); t.hist.push(RECENT); t.hi = t.hist.length - 1; }
+    var again = isRecent(t);
+    t.path = RECENT; t.mode = "search"; t.space = null; t.zip = null; t.error = "";
+    var s = t.search = { root: RECENT, query: "", recent: true, opts: {}, items: again ? t.search.items : [], scanned: 0, done: false, job: 0, sorted: again && t.search.sorted };
+    if (!again) { t.sel = new Set(); t.focus = -1; t.anchor = -1; t.scroll = 0; t.filter = ""; }
+    t.viewCache = null;
+    paintTab(t); setTitle();
+    return api("recent").then(function (r) {
+      if (t.search !== s) { return; }
+      s.items = r.items || []; s.done = true; t.viewCache = null; paintTab(t); afterOpen(t);
+    }, function (e) { if (t.search === s) { s.done = true; paintTab(t); fail(e); } });
+  }
   function openPath(t, path, o) {
     o = o || {};
     path = path == null ? "" : String(path);
+    if (path === RECENT) { return openRecent(t, o); }
     if (LINUX && isSmbText(path)) {
       if (isOtherNet(path)) {
         var od = shareDrive(path), np = netParts(netUri(path)), dp = od && netParts(od.unc);
@@ -1696,6 +1731,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     paintSide();
   }
   function refresh(t, quiet) {
+    if (isRecent(t)) { openRecent(t, { keep: true }); return; }
     if (t.mode === "search") { runSearch(t, t.search.query, t.search.opts); return; }
     if (t.mode === "space") { openSpace(t, t.space.path, true); return; }
     var keepSel = Array.from(t.sel), sc = t.scroll;
@@ -1715,9 +1751,10 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     t.focus = i; t.anchor = i;
     t.scrollTo = i;
   }
-  function goBack(t) { if (t.mode !== "folder") { openPath(t, t.path, { keep: true, replace: true }); return; } if (t.hi > 0) { t.hi--; openPath(t, t.hist[t.hi], { replace: true, select: [] }); } }
+  function goBack(t) { if (t.mode !== "folder" && !isRecent(t)) { openPath(t, t.path, { keep: true, replace: true }); return; } if (t.hi > 0) { t.hi--; openPath(t, t.hist[t.hi], { replace: true, select: [] }); } }
   function goFwd(t) { if (t.hi < t.hist.length - 1) { t.hi++; openPath(t, t.hist[t.hi], { replace: true }); } }
   function goUp(t) {
+    if (isRecent(t)) { openPath(t, ""); return; }
     if (t.mode !== "folder") { openPath(t, t.path, { keep: true, replace: true }); return; }
     var up = parentOf(t.path);
     if (up === null || t.isTrash) { return; }
@@ -1751,7 +1788,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   function passes(t, e) {
     if (PICK && !pickPasses(e)) { return false; }
     if (!S.hidden && isHidden(e) && t.mode !== "search") { return false; }
-    if (t.filter && t.mode === "folder") {
+    if (t.filter && (t.mode === "folder" || isRecent(t))) {
       var words = t.filter.toLowerCase().split(/\s+/).filter(Boolean), n = e.n.toLowerCase();
       if (/[*?]/.test(t.filter)) {
         var re = new RegExp("^" + t.filter.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i");
@@ -1784,11 +1821,13 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (passes(t, e)) { out.push(e); }
     }
     var key = t.sort.key, dir = t.sort.dir;
+    if (isRecent(t) && !t.search.sorted) { key = "used"; dir = -1; }
     var coll = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     out.sort(function (a, b) {
       if (a.d !== b.d) { return a.d ? -1 : 1; }
       var r = 0;
       if (key === "mod") { r = (a.m || 0) - (b.m || 0); }
+      else if (key === "used") { r = (a.u || 0) - (b.u || 0); }
       else if (key === "size") { r = sizeOfEntry(t, a) - sizeOfEntry(t, b); }
       else if (key === "type") { r = coll.compare(typeLabel(a), typeLabel(b)); }
       else if (key === "ext") { r = coll.compare(extOf(a.n), extOf(b.n)); }
@@ -1848,9 +1887,9 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     }
     var keep = strip.scrollLeft, fresh = tabs._shown != null && p.active !== tabs._shown;   // (fresh: just switched to)
     strip.innerHTML = p.tabs.map(function (tb, k) {
-      var label = tb.mode === "search" ? "Search: " + tb.search.query : tb.mode === "space" ? "Space: " + baseName(tb.space.path) : baseName(tb.path);
-      var ic = tb.mode === "search" ? svg("search") : tb.mode === "space" ? svg("pie") : tb.path === "" ? svg("pc") : /^\\\\[^\\]+$/.test(tb.path) ? svg("server") : "<span class='fi' style='width:16px;height:16px'>" + folderSvg() + "</span>";
-      return "<div class='tab" + (k === p.active ? " on" + (fresh ? " fresh" : "") : "") + "' role='tab' data-t='" + k + "' title='" + esc(tb.path || "This PC") + "' aria-selected='" + (k === p.active) + "'>" + ic + "<span class='tl'>" + esc(label) + "</span>" +
+      var label = isRecent(tb) ? "Recent" : tb.mode === "search" ? "Search: " + tb.search.query : tb.mode === "space" ? "Space: " + baseName(tb.space.path) : baseName(tb.path);
+      var ic = isRecent(tb) ? svg("clock") : tb.mode === "search" ? svg("search") : tb.mode === "space" ? svg("pie") : tb.path === "" ? svg("pc") : /^\\\\[^\\]+$/.test(tb.path) ? svg("server") : "<span class='fi' style='width:16px;height:16px'>" + folderSvg() + "</span>";
+      return "<div class='tab" + (k === p.active ? " on" + (fresh ? " fresh" : "") : "") + "' role='tab' draggable='" + (PICK ? "false" : "true") + "' data-t='" + k + "' title='" + esc(isRecent(tb) ? "Recent" : tb.path || "This PC") + "' aria-selected='" + (k === p.active) + "'>" + ic + "<span class='tl'>" + esc(label) + "</span>" +
         "<button class='tx' data-x='" + k + "' title='Close tab (Ctrl+W)'>" + svg("x") + "</button></div>";
     }).join("");
     strip.scrollLeft = keep;
@@ -1893,7 +1932,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (t.view === "grid") { head.hidden = true; }
     var arrow = function (k) { return t.sort.key === k ? (t.sort.dir > 0 ? " \u25B4" : " \u25BE") : ""; };
     head.innerHTML = "<button data-s='name' class='" + (t.sort.key === "name" ? "on" : "") + "'>Name" + arrow("name") + "</button>" +
-      (wide ? "<button data-s='folder' class='" + (t.sort.key === "folder" ? "on" : "") + "'>" + (t.mode === "search" ? "Folder" : "Was in") + arrow("folder") + "</button>" : "") +
+      (wide ? "<button data-s='folder' class='" + (t.sort.key === "folder" ? "on" : "") + "'>" + (t.mode === "search" ? (t.search && t.search.opts.content ? "Found" : "Folder") : "Was in") + arrow("folder") + "</button>" : "") +
       "<button data-s='ext' class='cx " + (t.sort.key === "ext" || t.sort.key === "type" ? "on" : "") + "' title='Sort by extension'>Ext" + arrow("ext") + "</button>" +
       "<button data-s='mod' class='ca " + (t.sort.key === "mod" ? "on" : "") + "' title='How long ago it changed'>Age</button>" +
       "<button data-s='mod' class='cm " + (t.sort.key === "mod" ? "on" : "") + "'>" + (t.isTrash && t.mode === "folder" ? "Deleted" : "Modified") + arrow("mod") + "</button>" +
@@ -1906,7 +1945,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   function paintTitle(i) {
     var p = panes[i], t = tabOf(p), h = p.el.querySelector(".ttl h2"), sub = p.el.querySelector(".ttl .tsub");
     var label, ic, note = "";
-    if (t.mode === "search") { label = t.search.query || "Search"; ic = svg("search"); note = "Search in " + baseName(t.search.root) + (t.search.done ? ", " + plural(t.search.items.length, "match") : "\u2026"); }
+    if (isRecent(t)) { label = "Recent"; ic = svg("clock"); note = t.search.done ? plural(t.search.items.length, "file") + " opened lately" : "\u2026"; }
+    else if (t.mode === "search") { label = t.search.query || "Search"; ic = svg("search"); note = "Search in " + baseName(t.search.root) + (t.search.done ? ", " + plural(t.search.items.length, "match") : "\u2026"); }
     else if (t.mode === "space") { label = baseName(t.space.path); ic = svg("pie"); note = "What's taking up space"; }
     else if (t.path === "") { label = "This PC"; ic = svg("pc"); note = whoAmI.machine || ""; }
     else {
@@ -1994,7 +2034,10 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (box.classList.contains("edit")) { return; }
     var segs = [];
     var path = t.mode === "space" ? t.space.path : t.path;
-    if (/^\\\\/.test(path)) {
+    if (path === RECENT) {
+      segs.push({ label: "This PC", path: "", icon: "pc" });
+      segs.push({ label: "Recent", path: RECENT });
+    } else if (/^\\\\/.test(path)) {
       var parts = path.slice(2).split("\\").filter(Boolean);
       segs.push({ label: "Network", path: null, icon: "net" });
       var acc = "\\\\" + parts[0];
@@ -2024,7 +2067,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       return (k ? "<span class='csep'>" + svg("fwd") + "</span>" : "") +
         "<button class='crumb" + (k === segs.length - 1 ? " last" : "") + "' data-c='" + k + "'" + (s.path === null ? " disabled" : "") + ">" + (s.icon ? svg(s.icon) : esc(s.label)) + "</button>";
     }).join("");
-    if (t.mode === "search") { html += "<span class='csep'>" + svg("fwd") + "</span><span class='crumb last'>Search results</span>"; }
+    if (t.mode === "search" && !isRecent(t)) { html += "<span class='csep'>" + svg("fwd") + "</span><span class='crumb last'>Search results</span>"; }
     if (t.mode === "space") { html += "<span class='csep'>" + svg("fwd") + "</span><span class='crumb last'>Space</span>"; }
     box.innerHTML = html + "<span class='fill'></span>";
     box.classList.remove("tight");
@@ -2104,13 +2147,20 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
         "<button class='btn sm' data-zx='sel'>Extract selected</button><button class='btn sm' data-zx='all'>Extract all</button>";
       return;
     }
+    if (isRecent(t)) {
+      box.hidden = false;
+      box.innerHTML = (t.search.done ? svg("clock") : "<span class='spin'></span>") + "<span>" + (t.search.done ? "<b>" + plural(t.search.items.length, "file") + "</b> opened lately, the latest first" : "Gathering the files you opened lately\u2026") +
+        "</span><span class='grow'></span><button class='btn sm' data-recentagain>Refresh</button>";
+      return;
+    }
     if (t.mode === "search" && t.search) {
       var s = t.search;
       box.hidden = false;
       box.innerHTML = (s.done ? svg("search") : "<span class='spin'></span>") +
-        "<span>" + (s.done ? "" : "Searching for ") + (s.done ? "<b>" + plural(s.items.length, "result") + "</b> for " : "") + "<b>" + esc(s.query || "everything") + "</b> in <b>" + esc(baseName(s.root)) + "</b> and its folders" +
+        "<span>" + (s.done ? "" : "Searching for ") + (s.done ? "<b>" + plural(s.items.length, "result") + "</b> for " : "") + "<b>" + esc(s.query || "everything") + "</b>" + (s.opts.content ? " inside files" : "") + " in <b>" + esc(baseName(s.root)) + "</b> and its folders" +
         (s.done ? "" : " \u00B7 " + plural(s.items.length, "found") .replace(" founds", " found") + ", " + s.scanned.toLocaleString() + " looked at") +
         (s.capped ? " \u00B7 stopped at " + s.items.length.toLocaleString() + "; narrow the search to see more" : "") + (s.cancelled ? " \u00B7 stopped" : "") + "</span><span class='grow'></span>" +
+        "<span class='seg sm' title='Search the names of files and folders, or the words inside files'><button data-inside='0' class='" + (s.opts.content ? "" : "on") + "'>Names</button><button data-inside='1' class='" + (s.opts.content ? "on" : "") + "'>Inside files</button></span>" +
         (s.done ? "" : "<button class='btn sm' data-stop>Stop</button>") + "<button class='btn sm' data-exit>Back to the folder</button>";
     }
   }
@@ -2175,7 +2225,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var sz = e.d ? (t.sizes[e.p] != null ? fmtSize(t.sizes[e.p]) : (t.sizesBusy && t.sizesBusy[e.p] ? "\u2026" : "")) : fmtSize(e.s);
     return "<div class='" + cls + "' data-i='" + n + "' style='position:absolute;left:0;right:0;top:" + y + "px' draggable='true'>" +
       "<div class='nm'>" + iconHtml(e, e.p) + "<span class='" + (isHidden(e) ? "hid" : "") + "'>" + esc(e.n) + "</span>" + (e.cl ? "<span class='onl' title='Stored online: downloads when you open it'>" + svg("cloud") + "</span>" : "") + "</div>" +
-      (t.mode === "search" ? "<div class='dim' title='" + esc(parentOf(e.p)) + "'>" + esc(shortFolder(t, e.p)) + "</div>" : "") +
+      (t.mode === "search" ? (e.hit != null ? "<div class='dim hitx' title='" + esc(parentOf(e.p) + (e.ln ? " \u00B7 line " + e.ln : "")) + "'>" + hitHtml(e.hit, t.search.query) + "</div>" : "<div class='dim' title='" + esc(parentOf(e.p)) + "'>" + esc(shortFolder(t, e.p)) + "</div>") : "") +
       (bin ? "<div class='dim' title='" + esc(e.o || "") + "'>" + esc(e.o ? parentOf(e.o) : "Unknown") + "</div>" : "") +
       extCell(e) + "<div class='ca'>" + ageChip(e.m) + "</div>" +
       "<div class='dim cm'>" + esc(fmtStamp(e.m)) + "</div>" +
@@ -2203,6 +2253,14 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (!ms) { return ""; }
     var d = new Date(ms);
     return STAMP_D.format(d) + " " + STAMP_T.format(d);
+  }
+  // the words found inside a file, with the ones searched for marked
+  function hitHtml(text, q) {
+    var words = String(q || "").trim().split(/\s+/).filter(Boolean).map(function (w) { return w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); });
+    if (!words.length) { return esc(text); }
+    var m = new RegExp(words.join("\\s+"), "i").exec(text);
+    if (!m) { return esc(text); }
+    return esc(text.slice(0, m.index)) + "<mark>" + esc(m[0]) + "</mark>" + esc(text.slice(m.index + m[0].length));
   }
   function shortFolder(t, p) {
     var par = parentOf(p) || "", root = trimSlash(t.search.root);
@@ -2354,7 +2412,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     }).join("") : "<div class='sempty'>Looking for drives\u2026</div>", "", LINUX ? "<button data-smb title='Connect to a server'>" + svg("plus") + "</button>" : "<button data-mapdrive title='Map a network drive'>" + svg("plus") + "</button>");
     // the drives stay put at the top of the side bar; everything under them scrolls
     $("sidePin").innerHTML = pin;
-    var html = card("", item("", "This PC", "", "pc") + places.map(function (pl) { return item(pl.path, pl.name, "", PLACEICON[pl.name] || "folder"); }).join("") +
+    var html = card("", item("", "This PC", "", "pc") + (PICK && PICK.mode === "save" ? "" : item(RECENT, "Recent", "", "clock")) + places.map(function (pl) { return item(pl.path, pl.name, "", PLACEICON[pl.name] || "folder"); }).join("") +
       (LINUX && trashBin.path ? item(trashBin.path, "Trash", trashBin.count ? esc(plural(trashBin.count, "item")) : "", "trash", " data-trash") : ""));
     // what's connected on this computer; on Linux, where no service has an app, Atlas connects them itself
     if (clouds.length || OMARCHY) {
@@ -2372,7 +2430,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     html += "<button class='snew' data-newgroup>" + svg("plus") + "New group</button>";
     if (!LINUX) html += card("Network", S.servers.length ? S.servers.map(function (sv) { return item(sv, baseName(sv), esc(sv), /^\\\\[^\\]+$/.test(sv) ? "server" : "net", " data-srv='" + esc(sv) + "'"); }).join("") :
         "<div class='sempty'>Add a server such as \\\\fileserver to see its shares.</div>", "", "<button data-addsrv title='Add a server or share'>" + svg("plus") + "</button>");
-    if (S.recent.length) { html += card("Recent", S.recent.slice(0, 8).map(function (r) { return item(r, baseName(r), "", "clock"); }).join(""), "", "<button data-clrrec title='Clear the list'>" + svg("x") + "</button>"); }
+    if (S.recent.length) { html += card("Recent folders", S.recent.slice(0, 8).map(function (r) { return item(r, baseName(r), "", "clock"); }).join(""), "", "<button data-clrrec title='Clear the list'>" + svg("x") + "</button>"); }
     $("sideScroll").innerHTML = html;
   }
   /* ---- Mapping network drives ---------------------------------------------------------------------- */
@@ -2894,6 +2952,11 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (paths.some(function (p) { return inside(dest, p); })) { toast("A folder cannot be copied or moved into itself.", { bad: true }); return Promise.resolve(false); }
     return api("conflicts", { sources: paths, dest: dest }).then(function (r) {
       var c = r.conflicts || [];
+      if (r.writable === false && LINUX && !MAC) {
+        var w = paths.length === 1 ? "\u201C" + baseName(paths[0]) + "\u201D" : plural(paths.length, "item");
+        return offerAdmin({ title: (move ? "Move " : "Copy ") + w + " as administrator?", action: move ? "move" : "copy", args: { paths: paths, dest: dest },
+          sub: "Your account isn't allowed to change " + baseName(dest) + ". Atlas can " + (move ? "move" : "copy") + " " + (paths.length === 1 ? "it" : "them") + " there as the administrator" + (c.length ? "; what's already there is left as it is." : ".") }).then(function () { return null; });
+      }
       if (!c.length) { return "keep"; }
       var sameFolder = paths.some(function (p) { return samePath(parentOf(p), dest); });
       if (sameFolder && !move) { return "keep"; }
@@ -3007,7 +3070,13 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (r.error) { throw new Error(r.error); }
       pushUndo("making " + r.name, function () { return api("delete", { paths: [r.path], permanent: false }).then(checked); });
       return openPath(t, t.path, { keep: true, select: [r.name] }).then(function () { startRename(t, r.name); });
-    }).catch(fail);
+    }).catch(function (e) {
+      if (!denied(e.message)) { fail(e); return; }
+      ask("New folder as administrator", "Name", "New folder", "Your account isn't allowed to change " + baseName(t.path) + ". Atlas can make the folder as the administrator.").then(function (n) {
+        n = (n || "").trim(); if (!n || /\//.test(n)) { return; }
+        runAdmin("mkdir", { paths: [join(t.path, n)] }, null, 0).then(function (ok) { if (ok) { openPath(t, t.path, { keep: true, select: [n] }); } });
+      });
+    });
   }
   function newFile(t) {
     if (zipBlocked(t)) { return; }
@@ -3016,7 +3085,13 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (r.error) { throw new Error(r.error); }
       pushUndo("making " + r.name, function () { return api("delete", { paths: [r.path], permanent: false }).then(checked); });
       return openPath(t, t.path, { keep: true, select: [r.name] }).then(function () { startRename(t, r.name); });
-    }).catch(fail);
+    }).catch(function (e) {
+      if (!denied(e.message)) { fail(e); return; }
+      ask("New file as administrator", "Name", "New text file.txt", "Your account isn't allowed to change " + baseName(t.path) + ". Atlas can make the file as the administrator.").then(function (n) {
+        n = (n || "").trim(); if (!n || /\//.test(n)) { return; }
+        runAdmin("newfile", { paths: [join(t.path, n)] }, null, 0).then(function (ok) { if (ok) { openPath(t, t.path, { keep: true, select: [n] }); } });
+      });
+    });
   }
   // copies beside the originals: "Report (2).pdf"
   function duplicateItems(t) {
@@ -3050,7 +3125,10 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       var what = paths.length === 1 ? baseName(paths[0]) : plural(paths.length, "file");
       undoToast(on ? what + " can run as a program now." : what + " won't run as a program now.", pushUndo((on ? "allowing " : "stopping ") + what + " to run", function () { return go(!on); }), { good: true });
       refresh(t, true);
-    }).catch(fail);
+    }).catch(function (e) {
+      if (!denied(e.message)) { fail(e); return; }
+      offerAdmin({ title: (on ? "Allow running" : "Stop running") + " as administrator?", action: "chmod", args: { paths: paths, on: on ? 73 : 0, off: on ? 0 : 73, recursive: false } });
+    });
   }
   // "*.jpg", "IMG_*; *.png": the items whose names match, selected (letter case doesn't matter)
   function selectPattern(i) {
@@ -3121,7 +3199,14 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   var lastRename = null;
   function doRename(t, items, quiet) {
     return api("rename", { items: items }).then(function (r) {
-      if (r.problems && r.problems.length) { failPath(r.problems[0].path || items[0].path, r.problems[0].error); return; }
+      if (r.problems && r.problems.length) {
+        if (denied(r.problems[0].error)) {
+          return offerAdmin({ title: "Rename as administrator?", action: "rename", args: { items: items } }).then(function (ok) {
+            if (ok) { return openPath(t, t.path, { keep: true, select: items.map(function (x) { return x.name; }) }); }
+          });
+        }
+        failPath(r.problems[0].path || items[0].path, r.problems[0].error); return;
+      }
       lastRename = (r.renamed || []).map(function (x) { return { path: x.to, name: baseName(x.from) }; });
       var names = (r.renamed || []).map(function (x) { return baseName(x.to); });
       var back = lastRename, u = null;
@@ -3141,7 +3226,12 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (t.isTrash) { permanent = true; }
     var go = function (perm) {
       return api("delete", { paths: paths, permanent: perm }).then(function (r) {
-        if (r.problems && r.problems.length) { failPath(r.problems[0].path, r.problems[0].error); }
+        var refused = (r.problems || []).filter(function (x) { return x.path && denied(x.error); }).map(function (x) { return x.path; });
+        if (refused.length) {
+          var rw = refused.length === 1 ? "\u201C" + baseName(refused[0]) + "\u201D" : plural(refused.length, "item");
+          offerAdmin({ title: "Delete " + rw + " as administrator?", label: "Delete permanently", action: "delete", args: { paths: refused },
+            sub: "Your account isn't allowed to " + (perm ? "delete" : "move") + " " + (refused.length === 1 ? "it" : "them") + (perm ? "" : " to the Trash") + ". As the administrator, Atlas can delete " + (refused.length === 1 ? "it" : "them") + " permanently: this can't be undone." });
+        } else if (r.problems && r.problems.length) { failPath(r.problems[0].path, r.problems[0].error); }
         var gone = (r.trashed || []).map(function (x) { return x.to; });
         if (r.removed && !perm && gone.length) {
           undoToast("Moved " + what + " to the Trash.", pushUndo("moving " + what + " to the Trash", function () { return api("restore", { paths: gone }).then(checked); }));
@@ -3159,6 +3249,84 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       return;
     }
     go(false);
+  }
+
+  /* ---- Duplicate files: the same contents in more than one place ---------------------------------- */
+  function findDupes(t, root) {
+    root = root || t.path;
+    if (!root || inZip(t) || /^\\\\[^\\]+$/.test(root) || t.isTrash) { toast("Open a folder or drive to look for duplicates in.", { bad: true }); return; }
+    var res = null, job = 0, ticked = new Set(), shown = 300;
+    function keepOnly(how) {
+      ticked = new Set();
+      if (how === "none") { return; }
+      res.groups.forEach(function (g) { var keep = how === "newest" ? g.files[g.files.length - 1] : g.files[0]; g.files.forEach(function (f) { if (f !== keep) { ticked.add(f.p); } }); });
+    }
+    function tickedBytes() { var b = 0; res.groups.forEach(function (g) { g.files.forEach(function (f) { if (ticked.has(f.p)) { b += g.size; } }); }); return b; }
+    function updBtn(s) {
+      var b = s.querySelector(".btn.pri");
+      b.disabled = !res || !ticked.size;
+      b.textContent = ticked.size ? "Move " + plural(ticked.size, "file") + " to the Trash (" + fmtSize(tickedBytes()) + ")" : "Move to the Trash";
+    }
+    function paintRes(s) {
+      var box = s.querySelector("#dpBody");
+      if (!res.groups.length) {
+        box.innerHTML = "<p class='dp-none'>" + (res.cancelled ? "Stopped before the end: no" : "No") + " duplicates among " + plural(res.files, "file") + " in " + esc(baseName(root)) + ".</p>";
+        updBtn(s); return;
+      }
+      box.innerHTML = "<div class='dp-top'><span><b>" + plural(res.groups.length, "set") + "</b> of duplicates among " + plural(res.files, "file") + " \u00B7 " + fmtSize(res.wasted) + " could be freed" + (res.cancelled ? " (stopped before the end)" : "") + "</span><span class='grow'></span>" +
+        "<span class='seg sm'><button data-keep='oldest'>Keep the oldest</button><button data-keep='newest'>Keep the newest</button><button data-keep='none'>Untick all</button></span></div>" +
+        "<div class='rwrap dp-list'>" + res.groups.slice(0, shown).map(function (g, gi) {
+          return "<div class='dp-g'><div class='dp-gh'>" + g.files.length + " copies of " + esc(fmtSize(g.size)) + "</div>" + g.files.map(function (f) {
+            return "<label class='dp-f'><input type='checkbox' data-g='" + gi + "' data-p='" + esc(f.p) + "'" + (ticked.has(f.p) ? " checked" : "") + "><span class='nm' title='" + esc(f.p) + "'>" + esc(f.n) + "</span>" +
+              "<span class='dim fo' title='" + esc(parentOf(f.p)) + "'>" + esc(parentOf(f.p)) + "</span><span class='dim'>" + esc(fmtDate(f.m)) + "</span><button class='btn sm' data-show='" + esc(f.p) + "'>Show</button></label>";
+          }).join("") + "</div>";
+        }).join("") + (res.groups.length > shown ? "<div class='dp-more'><button class='btn sm' data-more>Show " + Math.min(300, res.groups.length - shown) + " more sets</button></div>" : "") +
+        (res.more ? "<p class='dim'>And " + res.more + " more sets: look in a smaller folder to see them.</p>" : "") + "</div>";
+      updBtn(s);
+    }
+    dialog({ title: "Duplicate files in " + baseName(root), sub: "Files with exactly the same contents, compared byte for byte. Tick the copies to let go of.", icon: "copies", wide: true,
+      body: "<div id='dpBody'><div class='dp-wait'><span class='spin'></span><span id='dpMsg'>Looking at the files\u2026</span><button class='btn sm' data-stopd>Stop</button></div></div>",
+      buttons: [{ label: "Close", value: null }, { label: "Move to the Trash", pri: true,
+        check: function () {
+          // never every copy of something
+          var all = res && res.groups.filter(function (g) { return g.files.every(function (f) { return ticked.has(f.p); }); })[0];
+          if (all) { toast("Every copy of " + all.files[0].n + " is ticked: leave one.", { bad: true }); }
+          return !!res && !all;
+        },
+        read: function () { return Array.from(ticked); } }],
+      mount: function (s) {
+        updBtn(s);
+        s.addEventListener("click", function (ev) {
+          var k = ev.target.closest("[data-keep]"); if (k && res) { keepOnly(k.getAttribute("data-keep")); paintRes(s); return; }
+          var sh = ev.target.closest("[data-show]"); if (sh) { ev.preventDefault(); var p = sh.getAttribute("data-show"); openPath(t, parentOf(p), { select: [baseName(p)] }); return; }
+          if (ev.target.closest("[data-more]")) { shown += 300; paintRes(s); return; }
+          if (ev.target.closest("[data-stopd]") && job) { api("cancel", { job: job }).catch(function () { }); }
+        });
+        s.addEventListener("change", function (ev) {
+          var c = ev.target.closest("input[data-p]"); if (!c) { return; }
+          if (c.checked) { ticked.add(c.getAttribute("data-p")); } else { ticked.delete(c.getAttribute("data-p")); }
+          updBtn(s);
+        });
+        var pr = api("dupes", { root: root, options: { hidden: !!S.hidden } }, function (ev) {
+          var m = s.querySelector("#dpMsg"); if (!m) { return; }
+          m.textContent = ev.phase === "compare" ? "Comparing look-alikes\u2026 " + (ev.total ? Math.floor(ev.done * 100 / ev.total) + "%" : "") : "Looking at the files\u2026 " + (ev.files || 0).toLocaleString();
+        });
+        job = api.last;
+        pr.then(function (r) { if (!s.isConnected) { return; } res = r; job = 0; keepOnly("oldest"); paintRes(s); }, function (e) { if (s.isConnected) { s.querySelector("#dpBody").innerHTML = "<p class='dp-none'>" + esc(e.message) + "</p>"; } });
+      }
+    }).then(function (paths) {
+      if (job) { api("cancel", { job: job }).catch(function () { }); }
+      if (!paths || !paths.length) { return; }
+      api("delete", { paths: paths, permanent: false }).then(function (r) {
+        if (r.problems && r.problems.length) { failPath(r.problems[0].path, r.problems[0].error); }
+        var gone = (r.trashed || []).map(function (x) { return x.to; });
+        var what = plural(paths.length, "duplicate");
+        if (gone.length) { undoToast("Moved " + what + " to the Trash.", pushUndo("moving " + what + " to the Trash", function () { return api("restore", { paths: gone }).then(checked); })); }
+        else if (r.removed) { toast("Moved " + what + (LINUX ? " to the Trash." : " to the Recycle Bin.")); }
+        panes.forEach(function (p) { if (p) { var tb = tabOf(p); if (tb.mode === "folder" && tb.path) { refresh(tb, true); } } });
+        if (LINUX) { loadDrives(); }
+      }).catch(fail);
+    });
   }
 
   /* ---- The Trash (Linux) ------------------------------------------------------------------------------ */
@@ -3304,6 +3472,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (t.sizesJob) { api("cancel", { job: t.sizesJob }).catch(function () { }); t.sizesJob = 0; }
   }
   function runSearch(t, query, opts) {
+    if (isRecent(t)) { return; }   // the box filters the list there
     if (inZip(t)) { toast("Searching inside an archive is not possible: extract it, or type in the box to filter what is here.", { bad: true }); return; }
     var root = t.mode === "search" && t.search ? t.search.root : t.path;
     if (!root || /^\\\\[^\\]+$/.test(root)) { toast("Open a folder or drive to search in.", { bad: true }); return; }
@@ -3314,6 +3483,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     o.after = t.f.when ? Date.now() - (+t.f.when) * DAY : 0;
     o.minSize = t.f.size ? +t.f.size : "";
     o.hidden = !!S.hidden;
+    o.content = !!S.searchInside && !!query;
     if (t.mode === "folder") { t.hist = t.hist.slice(0, t.hi + 1); }
     t.mode = "search";
     t.search = { root: root, query: query, opts: o, items: [], scanned: 0, done: false, job: 0 };
@@ -3408,6 +3578,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     clearTimeout(pvTimer);
     pvTimer = setTimeout(paintPreviewNow, 90);
   }
+  var pvMap = null;   // where the photo in the preview was taken: [latitude, longitude]
   function factRows(list) { return "<dl class='pv-facts'>" + list.filter(function (r) { return r[1]; }).map(function (r) { return "<dt>" + esc(r[0]) + "</dt><dd>" + esc(r[1]) + "</dd>"; }).join("") + "</dl>"; }
   function paintPreviewNow() {
     var t = cur(), body = $("pvBody");
@@ -3471,10 +3642,22 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
         }).catch(function () { });
       }
     }
+    var media = null, base = null, mapAt = null;
+    var paintFacts = function () {
+      if (ticket !== pvTicket || !base || !$("pvFacts")) { return; }
+      $("pvFacts").innerHTML = factRows([["Found", e.hit || ""], ["On line", e.hit && e.ln ? String(e.ln) : ""]].concat(media || [], base)) +
+        (mapAt ? "<div class='pv-acts pv-map'><button class='btn sm' data-pv='map'>" + svg("pic") + "Show where it was taken</button></div>" : "");
+    };
+    // a photo's camera and place, a song's tags, a PDF's pages... (atlas_media.py), when the file has them
+    if (!e.d && !e.cl && /^\.(jpe?g|jpe|png|gif|webp|bmp|tiff?|mp4|m4v|mov|mkv|webm|avi|wmv|flv|mpe?g|ts|3gp|mp3|m4a|aac|flac|ogg|oga|opus|wav|wma|aiff?|alac|pdf|docx|docm|xlsx|xlsm|pptx)$/i.test(extOf(e.n)) && !inZip(t)) {
+      api("media", { path: e.p }).then(function (r) { if (ticket !== pvTicket) { return; } media = r.rows || []; mapAt = r.map || null; pvMap = mapAt; paintFacts(); }).catch(function () { });
+    }
+    pvMap = null;
     api("details", { path: e.p }).then(function (d) {
       if (ticket !== pvTicket) { return; }
-      $("pvFacts").innerHTML = factRows([["Modified", fmtDate(d.m, true)], ["Created", fmtDate(d.c, true)], ["Opened", fmtDate(d.accessed, true)], e.o || e.x ? ["Was in", e.o ? parentOf(e.o) : "Unknown"] : ["Location", parentOf(e.p)], ["Deleted", e.x ? fmtDate(e.x, true) : ""],
-        ["Contains", d.items != null ? plural(d.items, "item") : ""], ["Size", d.d ? "" : fmtSize(d.s) + " (" + (d.s || 0).toLocaleString() + " bytes)"], ["Owner", d.owner], ["Version", d.version], ["Product", d.product], ["Company", d.company], ["Attributes", d.attributes]]);
+      base = [["Modified", fmtDate(d.m, true)], ["Created", fmtDate(d.c, true)], ["Opened", fmtDate(d.accessed, true)], e.o || e.x ? ["Was in", e.o ? parentOf(e.o) : "Unknown"] : ["Location", parentOf(e.p)], ["Deleted", e.x ? fmtDate(e.x, true) : ""],
+        ["Contains", d.items != null ? plural(d.items, "item") : ""], ["Size", d.d ? "" : fmtSize(d.s) + " (" + (d.s || 0).toLocaleString() + " bytes)"], ["Owner", d.owner], ["Version", d.version], ["Product", d.product], ["Company", d.company], ["Attributes", d.attributes]];
+      paintFacts();
     }).catch(function () { });
   }
   // Every page of a PDF, as pictures made when they are scrolled to
@@ -3696,6 +3879,38 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       toast(baseName(path) + " is open in another program.", { bad: true, action: "What's using it", run: function () { whoIsUsing([path]); }, ms: 9000 });
     } else { toast(baseName(path) + ": " + msg, { bad: true, ms: 7000 }); }
   }
+  /* ---- As the administrator (Linux): what this account isn't allowed to change ---------------------- */
+  function denied(msg) { return LINUX && !MAC && /permission denied|operation not permitted/i.test(String(msg || "")); }
+  function refreshShown() { panes.forEach(function (p) { if (p) { var tb = tabOf(p); if (tb.mode === "folder" && tb.path) { refresh(tb, true); } } }); }
+  // o: title, sub, label, action and args for atlas_admin.py; answers whether it was done
+  function offerAdmin(o) {
+    return dialog({ title: o.title, icon: "alert", sub: o.sub || "Your account isn't allowed to change it. Atlas can do it as the administrator once you give the password.",
+      buttons: [{ label: "Cancel", value: false }, { label: o.label || "Do it as administrator", pri: true, value: true }] }).then(function (ok) {
+      return ok ? runAdmin(o.action, o.args, null, 0) : false;
+    }).then(function (done) { if (done) { refreshShown(); if (LINUX) { loadDrives(); } } return done; });
+  }
+  function runAdmin(action, args, pw, tries) {
+    var a = { action: action };
+    for (var k in args) { a[k] = args[k]; }
+    if (pw != null) { a.password = pw; }
+    if (pw == null) { toast("Waiting for the administrator's password\u2026", { ms: 4000 }); }
+    return api("admin", a).then(function (r) {
+      if (r.ok) { return true; }
+      if (r.cancelled) { toast("Nothing was changed."); return false; }
+      if (r.needPassword || r.wrongPassword) {
+        if (tries >= 3) { toast("That password wasn't right, so nothing was changed.", { bad: true }); return false; }
+        return askPassword(!!r.wrongPassword).then(function (p) { return p == null ? false : runAdmin(action, args, p, tries + 1); });
+      }
+      throw new Error(r.error || "It didn't work.");
+    }).catch(function (e) { fail(e); return false; });
+  }
+  // only when no password window of the desktop's asks (pkexec then asks on its terminal, which Atlas holds)
+  function askPassword(again) {
+    return dialog({ title: "The administrator's password", icon: "alert",
+      sub: again ? "That wasn't right. Try again." : "The password you use for sudo. Atlas passes it to pkexec and doesn't keep it.",
+      body: "<div class='fld'><label>Password</label><input id='dlgPw' type='password' autocomplete='off' spellcheck='false'></div>",
+      buttons: [{ label: "Cancel", value: null }, { label: "OK", pri: true, read: function (s) { return s.querySelector("#dlgPw").value; } }] });
+  }
   function busyBody(text) { return "<div class='pv-note' style='padding:30px 10px'><span class='spin' style='display:inline-block;vertical-align:-3px;margin-right:8px'></span>" + esc(text) + "</div>"; }
   function copyText(text, what) { return api("copytext", { text: text }).then(function () { toast("Copied " + what + "."); }).catch(fail); }
 
@@ -3871,6 +4086,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (!items.length) { throw new Error((r.items[0] && r.items[0].error) || "It could not be read."); }
       var one = items.length === 1 ? items[0] : null, anyDir = items.some(function (x) { return x.d; }), anyFile = items.some(function (x) { return !x.d; });
       var mine = items.every(function (x) { return x.mine; });
+      var canEdit = mine || (LINUX && !MAC);   // someone else's: as the administrator (offerAdmin)
       var owners = uniq(items.map(function (x) { return x.owner; })), groups = uniq(items.map(function (x) { return x.group; }));
       var BITS = [[256, 128, 64], [32, 16, 8], [4, 2, 1]];
       var state = function (b) { var n = items.filter(function (x) { return x.mode & b; }).length; return n === items.length ? 1 : n ? -1 : 0; };
@@ -3880,7 +4096,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       var grid = "<table class='rtable permtab'><thead><tr><th></th><th>Read</th><th>Change</th><th>" + runLabel + "</th></tr></thead><tbody>" + who.map(function (w, row) {
         return "<tr><td><b>" + w[0] + "</b>" + (w[1] ? "<div class='acsub'>" + esc(w[1]) + "</div>" : "") + "</td>" + BITS[row].map(function (b) {
           var st = state(b);
-          return "<td><input type='checkbox' data-bit='" + b + "' data-st='" + st + "'" + (st === 1 ? " checked" : "") + (mine ? "" : " disabled") + "></td>";
+          return "<td><input type='checkbox' data-bit='" + b + "' data-st='" + st + "'" + (st === 1 ? " checked" : "") + (canEdit ? "" : " disabled") + "></td>";
         }).join("") + "</tr>";
       }).join("") + "</tbody></table>";
       var facts = one ? factRows([["Type", one.link ? "Link" : one.d ? "Folder" : typeLabel({ n: baseName(one.path), d: false })], ["Size", one.d ? "" : fmtSize(one.size) + " (" + one.size.toLocaleString() + " bytes)"],
@@ -3890,8 +4106,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
         uniq(r.groups.concat(groups)).map(function (g) { return "<option" + (groups.length === 1 && g === groups[0] ? " selected" : "") + ">" + esc(g) + "</option>"; }).join("") + "</select></div>" : "";
       var body = facts + "<div style='margin-top:10px'>" + grid + "</div>" +
         "<div class='acsub' id='prMode' style='margin-top:6px;font-family:var(--mono, monospace)'></div>" + groupSel +
-        (anyDir && mine ? "<label class='chk' style='margin-top:6px'><input type='checkbox' id='prR'> Also change everything inside" + (items.length > 1 ? " them" : " it") + "</label><div class='acsub'>Inside, " + runLabel.toLowerCase() + " only changes on folders, so files don't all become programs.</div>" : "") +
-        (mine ? "" : "<div class='warn'>" + (owners.length === 1 ? owners[0] + " owns " + (one ? "this" : "these") : "Some of these belong to someone else") + ", so only they or an administrator can change who may use " + (one ? "it" : "them") + ".</div>");
+        (anyDir && canEdit ? "<label class='chk' style='margin-top:6px'><input type='checkbox' id='prR'> Also change everything inside" + (items.length > 1 ? " them" : " it") + "</label><div class='acsub'>Inside, " + runLabel.toLowerCase() + " only changes on folders, so files don't all become programs.</div>" : "") +
+        (mine ? "" : "<div class='warn'>" + (owners.length === 1 ? owners[0] + " owns " + (one ? "this" : "these") : "Some of these belong to someone else") + ", so only they or an administrator can change who may use " + (one ? "it" : "them") + (canEdit ? ": Atlas will ask for the administrator's password" : "") + ".</div>");
       var paintMode = function (sc) {
         if (!one) { return; }
         var m = 0; sc.querySelectorAll("[data-bit]").forEach(function (c) { if (c.checked) { m |= +c.getAttribute("data-bit"); } });
@@ -3903,7 +4119,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
           sc.querySelectorAll("[data-bit]").forEach(function (c) { if (c.getAttribute("data-st") === "-1") { c.indeterminate = true; } c.addEventListener("change", function () { paintMode(sc); }); });
           paintMode(sc);
         },
-        buttons: mine ? [{ label: "Cancel", value: null }, { label: "Apply", pri: true, read: function (sc) {
+        buttons: canEdit ? [{ label: "Cancel", value: null }, { label: "Apply", pri: true, read: function (sc) {
           var on = 0, off = 0;
           sc.querySelectorAll("[data-bit]").forEach(function (c) {
             var st = +c.getAttribute("data-st"), b = +c.getAttribute("data-bit");
@@ -3916,6 +4132,10 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       }).then(function (v) {
         if (!v || (!v.on && !v.off && !v.group && !v.recursive)) { return; }
         return api("chperm", { paths: items.map(function (x) { return x.path; }), on: v.on, off: v.off, group: v.group, recursive: v.recursive }).then(function (res) {
+          if (res.problemCount && denied(res.problems[0].error) && (v.on || v.off) && !v.group) {
+            return offerAdmin({ title: "Change the permissions as administrator?", action: "chmod", args: { paths: items.map(function (x) { return x.path; }), on: v.on, off: v.off, recursive: v.recursive } })
+              .then(function (ok) { if (ok) { toast("Changed the permissions.", { good: true }); } });
+          }
           if (res.problemCount) { failPath(res.problems[0].path, res.problems[0].error + (res.problemCount > 1 ? " (and " + (res.problemCount - 1) + " more)" : "")); }
           toast(res.changed ? "Changed " + plural(res.changed, "item") + "." : "Nothing needed changing.", { good: !res.problemCount });
           var tb = cur(); if (tb.mode === "folder") { refresh(tb, true); }
@@ -4087,6 +4307,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (one && one.d) {
         items.push({ label: "Open in a new tab", icon: "plus", run: function () { openItem(t, one, "tab"); } });
         items.push({ label: "Open in the other pane", icon: "columns", run: function () { openItem(t, one, "other"); } });
+        if (!PICK) { items.push({ label: "Open in a new window", icon: "columns", run: function () { newWindow(one.p); } }); }
       }
       if (one && !one.d) { items.push({ label: "Open with\u2026", icon: "open", run: function () { api("openwith", { path: one.p }).catch(fail); } }); }
       if (!LINUX && one && !one.d && extOf(one.n) === ".ps1" && !inZip(t)) {
@@ -4118,6 +4339,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
         items.push({ label: runs ? "Don't run as a program" : "Allow running as a program", icon: "play", run: function () { setRunnable(t, !runs); } });
       }
       if (sel.some(function (e) { return e.d; })) { items.push({ label: "Folder sizes", icon: "pie", run: function () { folderSizes(t); } }); }
+      if (one && one.d && !inZip(t)) { items.push({ label: "Find duplicate files in it", icon: "copies", run: function () { findDupes(t, one.p); } }); }
       items.push({ label: "Add to a zip\u2026", icon: "copies", run: function () { zipItems(t); } });
       items.push("-");
       if (one) { items.push({ label: "Who has access", icon: "home", run: function () { accessDialog(one.p); } }); }
@@ -4142,6 +4364,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       items.push({ label: "Select all", icon: "check", key: "Ctrl+A", run: function () { selectAll(i); } });
       items.push({ label: "Select by pattern\u2026", icon: "filter", key: "Ctrl+S", disabled: !viewOf(t).length, run: function () { selectPattern(i); } });
       items.push({ label: "Folder sizes", icon: "pie", disabled: !can, run: function () { folderSizes(t); } });
+      items.push({ label: "Find duplicate files", icon: "copies", disabled: !can, run: function () { findDupes(t); } });
       items.push("-");
       items.push({ label: "Who has access to this folder", icon: "home", disabled: !can, run: function () { accessDialog(t.path); } });
       items.push({ label: "Compare with the other pane", icon: "columns", disabled: !can, run: compareWithOther });
@@ -4162,6 +4385,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       "-",
       { label: "Folder sizes", icon: "pie", disabled: !can, run: function () { folderSizes(t); } },
       { label: "What's taking up space", icon: "pie", disabled: !t.path, run: function () { openSpace(t, t.path); } },
+      { label: "Find duplicate files", icon: "copies", disabled: !can, run: function () { findDupes(t); } },
       { label: "Rename many\u2026", icon: "rename", disabled: !can, run: function () { bulkRename(t); } },
       "-",
       { label: "Who has access", icon: "home", disabled: !can, run: function () { accessDialog(t.path); } },
@@ -4230,6 +4454,36 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var p = panes[i], el = p.el, list = el.querySelector(".list");
     el.addEventListener("mousedown", function () { setActive(i); }, true);
     // tabs
+    el.querySelector(".tabs").addEventListener("contextmenu", function (ev) {
+      var tb = ev.target.closest("[data-t]"); if (!tb || PICK) { return; }
+      ev.preventDefault(); tabMenu(i, +tb.getAttribute("data-t"), ev);
+    });
+    // a tab dragged along the strip moves there; dragged out of the window, it opens in a window of its own
+    el.querySelector(".tabs").addEventListener("dragstart", function (ev) {
+      var tb = ev.target.closest("[data-t]"); if (!tb) { return; }
+      tabDrag = { pane: i, k: +tb.getAttribute("data-t"), out: false };
+      ev.dataTransfer.effectAllowed = "move";
+      ev.dataTransfer.setData("application/x-atlas-tab", String(tabDrag.k));
+    });
+    el.querySelector(".tabs").addEventListener("dragover", function (ev) {
+      if (!tabDrag || tabDrag.pane !== i) { return; }
+      var tb = ev.target.closest("[data-t]"); if (!tb) { return; }
+      ev.preventDefault(); ev.dataTransfer.dropEffect = "move";
+      clearDrop(); tb.classList.add("drop");
+    });
+    el.querySelector(".tabs").addEventListener("drop", function (ev) {
+      if (!tabDrag || tabDrag.pane !== i) { return; }
+      var tb = ev.target.closest("[data-t]"); if (!tb) { return; }
+      ev.preventDefault(); ev.stopPropagation(); clearDrop();
+      tabDrag.done = true;
+      moveTab(i, tabDrag.k, +tb.getAttribute("data-t"));
+    });
+    el.querySelector(".tabs").addEventListener("dragend", function (ev) {
+      var d = tabDrag; tabDrag = null; clearDrop();
+      if (!d || d.done) { return; }
+      var outside = d.out || ev.clientX <= 0 || ev.clientY <= 0 || ev.clientX >= W.innerWidth || ev.clientY >= W.innerHeight;
+      if (outside && ev.dataTransfer && ev.dataTransfer.dropEffect === "none") { tabToWindow(d.pane, d.k); }
+    });
     el.querySelector(".tabs").addEventListener("click", function (ev) {
       var x = ev.target.closest("[data-x]");
       if (x) { ev.stopPropagation(); closeTab(i, +x.getAttribute("data-x")); return; }
@@ -4244,7 +4498,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       if (ev.target.closest("[data-tl]")) {
         var r = ev.target.closest("[data-tl]").getBoundingClientRect();
         menu(r.right - 240, r.bottom + 4, p.tabs.map(function (tb, k) {
-          var label = tb.mode === "search" ? "Search: " + tb.search.query : tb.mode === "space" ? "Space: " + baseName(tb.space.path) : (baseName(tb.path) || "This PC");
+          var label = isRecent(tb) ? "Recent" : tb.mode === "search" ? "Search: " + tb.search.query : tb.mode === "space" ? "Space: " + baseName(tb.space.path) : (baseName(tb.path) || "This PC");
           return { label: label + (k === p.active ? "  \u2713" : ""), icon: tb.mode === "search" ? "search" : tb.mode === "space" ? "pie" : tb.path ? "folder" : "pc", run: function () { activateTab(i, k); } };
         }));
         return;
@@ -4308,7 +4562,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var fin = el.querySelector(".find input");
     fin.addEventListener("input", function () {
       var t = tabOf(p);
-      if (t.mode === "search") { return; }
+      if (t.mode === "search" && !isRecent(t)) { return; }
       t.filter = fin.value; t.viewCache = null; t.focus = -1;
       paintList(i, false); paintStatus(i);
     });
@@ -4331,12 +4585,20 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       var t = tabOf(p);
       if (ev.target.closest("[data-stop]") && t.search) { api("cancel", { job: t.search.job }).catch(function () { }); }
       if (ev.target.closest("[data-exit]")) { openPath(t, t.path, { keep: true, replace: true }); }
+      if (ev.target.closest("[data-recentagain]")) { openRecent(t, { keep: true }); return; }
+      var ins = ev.target.closest("[data-inside]");
+      if (ins && t.search && t.mode === "search") {
+        S.searchInside = ins.getAttribute("data-inside") === "1"; save();
+        if (S.searchInside && !t.search.query) { toast("Type the words to look for in the box, then press Enter."); paintTab(t); return; }
+        runSearch(t, t.search.query, null);
+      }
       var zx = ev.target.closest("[data-zx]");
       if (zx && inZip(t)) { if (zx.getAttribute("data-zx") === "all") { extractAll(t, t.zip.zip); } else { extractSelected(t); } }
     });
     el.querySelector(".head").addEventListener("click", function (ev) {
       var b = ev.target.closest("[data-s]"); if (!b) { return; }
       var t = tabOf(p), k = b.getAttribute("data-s");
+      if (isRecent(t)) { t.search.sorted = true; }
       t.sort = { key: k, dir: t.sort.key === k ? -t.sort.dir : (k === "mod" || k === "size" ? -1 : 1) };
       t.viewCache = null; paintPane(i); save();
     });
@@ -4473,7 +4735,10 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var list = ev.target.closest && ev.target.closest(".list");
     return list ? { el: list, path: t.path } : null;
   }
-  var tipEl = null;
+  var tipEl = null, tabDrag = null;
+  // a tab being dragged: whether it has left the window (WebKit says so with a dragleave that has nowhere to go)
+  D.addEventListener("dragleave", function (ev) { if (tabDrag && !ev.relatedTarget) { tabDrag.out = true; } });
+  D.addEventListener("dragenter", function () { if (tabDrag) { tabDrag.out = false; } });
   function showTip(ev, text) {
     if (!tipEl) { tipEl = D.createElement("div"); tipEl.className = "dragtip"; D.body.appendChild(tipEl); }
     tipEl.textContent = text;
@@ -4557,6 +4822,39 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (p.active >= p.tabs.length) { p.active = p.tabs.length - 1; } else if (k < p.active) { p.active--; }
     paintPane(i); paintSide(); pvShown = ""; paintPreview(); watchOpen(); save(); setTitle();
   }
+  // another Atlas window, on a folder (its own process: see new_window in atlas.py)
+  function newWindow(path) {
+    if (PICK) { return; }
+    api("newwindow", { path: path || "" }).then(function () { toast("Opening a new window\u2026", { ms: 2000 }); }).catch(fail);
+  }
+  function tabToWindow(i, k) {
+    var p = panes[i], tb = p.tabs[k];
+    if (!tb) { return; }
+    newWindow(tb.path);
+    if (p.tabs.length > 1) { closeTab(i, k); }
+  }
+  function moveTab(i, from, to) {
+    var p = panes[i];
+    if (from === to || !p.tabs[from]) { return; }
+    var act = p.tabs[p.active];
+    var tb = p.tabs.splice(from, 1)[0];
+    p.tabs.splice(Math.max(0, Math.min(to, p.tabs.length)), 0, tb);
+    p.active = p.tabs.indexOf(act);
+    paintPane(i); save();
+  }
+  function tabMenu(i, k, ev) {
+    var p = panes[i];
+    menu(ev.clientX, ev.clientY, [
+      { label: "New tab", icon: "plus", key: "Ctrl+T", run: function () { addTab(i, p.tabs[k].path); } },
+      { label: "Duplicate tab", icon: "copy", run: function () { var src = p.tabs[k], nt = newTabState(src.path); nt.view = src.view; nt.sort = { key: src.sort.key, dir: src.sort.dir }; p.tabs.splice(k + 1, 0, nt); p.active = k + 1; openPath(nt, src.path, { replace: true }); paintPane(i); save(); } },
+      { label: "Move to a new window", icon: "columns", run: function () { tabToWindow(i, k); } },
+      "-",
+      { label: "Close tab", icon: "x", key: "Ctrl+W", run: function () { closeTab(i, k); } },
+      { label: "Close other tabs", icon: "x", disabled: p.tabs.length < 2, run: function () { var keep = p.tabs[k]; for (var j = p.tabs.length - 1; j >= 0; j--) { if (p.tabs[j] !== keep) { closeTab(i, j); } } } },
+      { label: "Close tabs to the right", icon: "x", disabled: k >= p.tabs.length - 1, run: function () { for (var j = p.tabs.length - 1; j > k; j--) { closeTab(i, j); } } },
+      { label: "Open the closed tab again", icon: "back", key: "Ctrl+Shift+T", disabled: !closedTabs.length, run: reopenTab }
+    ]);
+  }
   function reopenTab() {
     var c = closedTabs.pop();
     if (!c) { toast("There's no closed tab to open again."); return; }
@@ -4592,7 +4890,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     var inField = ev.target && (ev.target.tagName === "INPUT" || ev.target.tagName === "SELECT" || ev.target.tagName === "TEXTAREA");
     var k = ev.key, ctrl = ev.ctrlKey || ev.metaKey;
     // a picker has no tabs, second pane, preview, folder columns or command palette to open
-    if (PICK && (ctrl && /^[tTkKpPbBmM\\]$/.test(k) || (k === " " && !inField))) { ev.preventDefault(); return; }
+    if (PICK && (ctrl && /^[tTkKpPbBmMnN\\]$/.test(k) || (k === " " && !inField))) { ev.preventDefault(); return; }
     // anywhere
     if (ctrl && (k === "k" || k === "K") || (ctrl && ev.shiftKey && (k === "p" || k === "P"))) { ev.preventDefault(); palette(); return; }
     if (ctrl && !ev.shiftKey && (k === "z" || k === "Z") && !inField) { ev.preventDefault(); undo(); return; }
@@ -4600,6 +4898,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (ctrl && (k === "-" || k === "_")) { ev.preventDefault(); setZoom(zoomLvl - 0.05); return; }
     if (ctrl && k === "0") { ev.preventDefault(); setZoom(1.15); return; }
     if (ctrl && ev.shiftKey && (k === "t" || k === "T")) { ev.preventDefault(); reopenTab(); return; }
+    if (ctrl && !ev.shiftKey && (k === "n" || k === "N")) { ev.preventDefault(); newWindow(t.path); return; }
     if (ctrl && (k === "t" || k === "T")) { ev.preventDefault(); addTab(i, t.path); return; }
     if (ctrl && (k === "w" || k === "W")) { ev.preventDefault(); closeTab(i, p.active); return; }
     if (ctrl && k === "Tab") { ev.preventDefault(); activateTab(i, (p.active + (ev.shiftKey ? p.tabs.length - 1 : 1)) % p.tabs.length); return; }
@@ -4635,8 +4934,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     else if (k === "End") { ev.preventDefault(); moveFocus(i, v.length - 1, ev); }
     else if (k === "Enter" && ev.altKey) { ev.preventDefault(); var s0 = selPaths(t); if (s0.length || t.path) { showProps(s0.length ? s0 : [t.path]); } }
     else if (k === "Enter") { ev.preventDefault(); if (ctrl) { var f0 = selected(t)[0]; if (f0 && f0.d) { openItem(t, f0, "tab"); } } else { openSelected(t); } }
-    else if (k === "Backspace") { ev.preventDefault(); if (t.mode === "search") { openPath(t, t.path, { keep: true, replace: true }); } else { goUp(t); } }
-    else if (k === "Escape") { if (t.mode === "search") { openPath(t, t.path, { keep: true, replace: true }); } else if (cutSet.size) { cutSet = new Set(); repaintAll(); } else if (t.filter) { t.filter = ""; t.viewCache = null; paintPane(i); } else if (PICK && !t.sel.size) { pickCancel(); } else { t.sel = new Set(); paintList(i); paintStatus(i); paintPreview(); } }
+    else if (k === "Backspace") { ev.preventDefault(); if (isRecent(t)) { goBack(t); } else if (t.mode === "search") { openPath(t, t.path, { keep: true, replace: true }); } else { goUp(t); } }
+    else if (k === "Escape") { if (t.mode === "search" && !isRecent(t)) { openPath(t, t.path, { keep: true, replace: true }); } else if (cutSet.size) { cutSet = new Set(); repaintAll(); } else if (t.filter) { t.filter = ""; t.viewCache = null; paintPane(i); } else if (PICK && !t.sel.size) { pickCancel(); } else { t.sel = new Set(); paintList(i); paintStatus(i); paintPreview(); } }
     else if (k === "F2") { ev.preventDefault(); startRename(t); }
     else if (k === "Delete") { ev.preventDefault(); deleteItems(t, ev.shiftKey); }
     else if (ctrl && (k === "a" || k === "A")) { ev.preventDefault(); selectAll(i); }
@@ -4664,8 +4963,11 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       { t: "New tab", ic: "plus", k: "Ctrl+T", run: function () { addTab(i, t.path); } },
       { t: "Close tab", ic: "x", k: "Ctrl+W", run: function () { closeTab(i, curPane().active); } },
       { t: "Open the closed tab again", ic: "back", k: "Ctrl+Shift+T", run: reopenTab },
+      { t: "New window", ic: "columns", k: "Ctrl+N", run: function () { newWindow(t.path); } },
+      { t: "Recent files", ic: "clock", run: function () { openPath(t, RECENT); } },
       { t: "Select by pattern\u2026", ic: "filter", k: "Ctrl+S", run: function () { selectPattern(i); } },
       { t: "Invert selection", ic: "check", k: "Ctrl+Shift+I", run: function () { invertSel(i); } },
+      { t: "Find duplicate files", ic: "copies", run: function () { findDupes(t); } },
       { t: S.dual ? "One pane" : "Two panes side by side", ic: "columns", k: "Ctrl+\\", run: function () { S.dual = !S.dual; layout(); } },
       { t: S.preview ? "Hide the preview" : "Show the preview", ic: "panel", k: "Ctrl+P", run: togglePreview },
       { t: S.pvPos === "right" ? "Preview at the bottom" : "Preview on the right", ic: S.pvPos === "right" ? "panelb" : "panel", run: movePreview },
@@ -5118,6 +5420,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     else if (a === "openwith" && one) { api("openwith", { path: one.p }).catch(fail); }
     else if (a === "reveal" && one) { reveal(one.p); }
     else if (a === "copypath") { copyPath(t); }
+    else if (a === "map" && pvMap) { api("url", { url: "https://www.openstreetmap.org/?mlat=" + pvMap[0] + "&mlon=" + pvMap[1] + "#map=15/" + pvMap[0] + "/" + pvMap[1] }).catch(fail); }
     else if (a === "props") { showProps(sel.length ? sel.map(function (e) { return e.p; }) : [one ? one.p : t.path]); }
     else if (a === "wall" && one) { setWallpaper(one.p); }
     else if (a === "fetch" && one) { pvFetch[one.p] = 1; pvShown = ""; paintPreviewNow(); }
@@ -5277,7 +5580,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   var startPath = "";
   var startSelect = "";
   try { startPath = new URLSearchParams(location.search).get("path") || ""; startSelect = new URLSearchParams(location.search).get("select") || ""; } catch (e) { }
-  var sess = PICK ? { panes: [{ active: 0, tabs: [{ path: startPath }] }] } : S.session;
+  var sess = PICK || EXTRA ? { panes: [{ active: 0, tabs: [{ path: startPath }] }] } : S.session;
+  if (EXTRA) { startPath = ""; S.dual = false; }
   if (PICK) { startSelect = PICK.mode === "save" && PICK.name ? PICK.name : ""; startPath = ""; S.dual = false; S.preview = false; S.mill = false; S.side = true; }
   if (sess && sess.panes && sess.panes.length) {
     panes = sess.panes.map(function (sp) { return makePane(sp); });
@@ -5290,6 +5594,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   var nt = null;
   if (startPath) { var sp0 = panes[activePane]; nt = newTabState(startPath); sp0.tabs.push(nt); sp0.active = sp0.tabs.length - 1; }
   if (PICK) { nt = panes[0].tabs[0]; pickStart(); }
+  if (EXTRA) { nt = panes[0].tabs[0]; }
   layout();
   paintSide();
   setTheme(S.theme);

@@ -135,6 +135,32 @@ def online_only(path, st):
 # A share connected in Atlas, the file manager or `gio mount` is a folder under /run/user/<uid>/gvfs,
 # named like smb-share:server=nas,share=media,user=bob. /proc/mounts only shows the one gvfsd-fuse
 # mount, so they are found here instead.
+def recent_files():
+    """Files opened lately, from the list GTK apps (and Atlas) keep: [(path, when used, in seconds)]."""
+    import datetime
+    import xml.etree.ElementTree as ET
+    p = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "recently-used.xbel")
+    try:
+        root = ET.parse(p).getroot()
+    except (OSError, ET.ParseError):
+        return []
+    out = []
+    for b in root.iter("bookmark"):
+        href = b.get("href") or ""
+        if not href.startswith("file://"):
+            continue
+        when = 0
+        for k in ("visited", "modified", "added"):
+            v = b.get(k)
+            if v:
+                try:
+                    when = max(when, datetime.datetime.fromisoformat(v.replace("Z", "+00:00")).timestamp())
+                except ValueError:
+                    pass
+        out.append((urllib.parse.unquote(urllib.parse.urlparse(href).path), when))
+    return out
+
+
 def gvfs_root():
     return os.path.join(os.environ.get("XDG_RUNTIME_DIR") or "/run/user/%d" % os.getuid(), "gvfs")
 
