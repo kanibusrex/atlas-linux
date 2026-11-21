@@ -2,11 +2,14 @@
 Cloud accounts on Linux, where OneDrive, Google and Apple offer no app of their own: rclone (from the system's
 packages) signs in and shows each account as a folder under ~/Cloud, for Atlas and every other app.
 
-Atlas keeps a list of the accounts and an rclone config of its own (its sign-ins encrypted, with a random password
-kept in the keyring, like a network share's password). Files are fetched when they are opened, and kept for a while
+Atlas keeps a list of the accounts, and an rclone config of their own for each (its sign-in encrypted, with a random
+password kept in the keyring, like a network share's password). One config per account, because each account's rclone
+keeps running and writes its config back when its sign-in is renewed: with one config for all, an rclone that had read
+it before another account was added wrote it back without that account, and the account was lost (1.3.0 to 1.4.1). Files are fetched when they are opened, and kept for a while
 in ~/.cache/atlas/rclone. On Windows and macOS the services' own apps make these folders; see cloud_places there.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -26,11 +29,13 @@ _HOME = os.path.expanduser("~")
 ROOT = os.environ.get("ATLAS_CLOUD_DIR") or os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(_HOME, ".local/share")), "atlas", "cloud")
 MOUNTS = os.environ.get("ATLAS_CLOUD_MOUNTS") or os.path.join(_HOME, "Cloud")
 CACHE = os.environ.get("ATLAS_CLOUD_CACHE") or os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.join(_HOME, ".cache")), "atlas", "rclone")
-CONF = os.path.join(ROOT, "rclone.conf")
+CONF = os.path.join(ROOT, "rclone.conf")      # all accounts in one, until 1.4.1 (its path still names the keyring's password)
+CONFS = os.path.join(ROOT, "accounts")         # one config per account since
 ACCOUNTS = os.path.join(ROOT, "accounts.json")
 LOG = os.path.join(ROOT, "rclone.log")
 SIGN_IN_WAIT = 300   # seconds a sign-in in the browser may take
 _lock = threading.Lock()
+_move_lock = threading.Lock()
 _problems = {}       # why an account couldn't be mounted
 
 
@@ -62,53 +67,139 @@ def _password_command():
     return " ".join('"%s"' % a if " " in a else a for a in _key_args())
 
 
-def _ensure_config():
-    """The config, encrypted when there's a keyring to hold its password (otherwise only you can read the file)."""
-    os.makedirs(ROOT, mode=0o700, exist_ok=True)
-    if os.path.exists(CONF):
-        return
-    with open(CONF, "w"):
-        pass
-    os.chmod(CONF, 0o600)
+def _conf(name):
+    """An account's own config file."""
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", name).strip("-")[:40] or "account"
+    return os.path.join(CONFS, "%s-%s.conf" % (slug, hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]))
+
+
+def _key():
+    """The password the configs are encrypted with, from the keyring (made the first time), or "" with no keyring."""
     if not shutil.which("secret-tool"):
-        return
+        return ""
     try:
+        got = subprocess.run(_key_args(), capture_output=True, text=True, timeout=30).stdout.strip()
+        if got:
+            return got
         word = secrets.token_urlsafe(32)
         subprocess.run(["secret-tool", "store", "--label=Atlas cloud accounts", "application", "atlas-cloud", "config", CONF],
                        input=word, text=True, capture_output=True, timeout=30, check=True)
-        got = subprocess.run(_key_args(), capture_output=True, text=True, timeout=30)
-        if got.stdout.strip() != word:
-            return
+        got = subprocess.run(_key_args(), capture_output=True, text=True, timeout=30).stdout.strip()
+        return got if got == word else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _new_config(name):
+    """A new, empty config for an account, encrypted when there's a keyring to hold its password (otherwise only
+    you can read the file). One left from before goes."""
+    os.makedirs(ROOT, mode=0o700, exist_ok=True)
+    os.makedirs(CONFS, mode=0o700, exist_ok=True)
+    path = _conf(name)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.close(fd)
+    os.chmod(path, 0o600)
+    if not _key():
+        return
+    try:
         env = dict(os.environ, RCLONE_PASSWORD_CHANGE="1")
-        subprocess.run([exe(), "--config", CONF, "--password-command", _password_command(), "config", "encryption", "set"],
+        subprocess.run([exe(), "--config", path, "--password-command", _password_command(), "config", "encryption", "set"],
                        env=env, stdin=subprocess.DEVNULL, capture_output=True, timeout=30, check=True)
     except (OSError, subprocess.SubprocessError):
         pass
 
 
-def _encrypted():
+def _encrypted(path):
     try:
-        with open(CONF, encoding="utf-8", errors="replace") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             return f.readline().startswith("# Encrypted rclone")
     except OSError:
         return False
 
 
-def _base():
-    return [exe(), "--config", CONF] + (["--password-command", _password_command()] if _encrypted() else [])
+def _base(name, path=None):
+    path = path or _conf(name)
+    return [exe(), "--config", path] + (["--password-command", _password_command()] if _encrypted(path) else [])
+
+
+def _remotes(base):
+    try:
+        r = subprocess.run(base + ["listremotes"], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return [ln.strip()[:-1] for ln in r.stdout.splitlines() if ln.strip().endswith(":")] if r.returncode == 0 else None
+
+
+def _signed_in(name):
+    """Whether the account's config still has its sign-in."""
+    return name in (_remotes(_base(name)) or [])
 
 
 def _forget_config():
-    """With no accounts left, nothing of them stays: the config and its password in the keyring."""
-    try:
-        os.remove(CONF)
-    except OSError:
-        pass
+    """With no accounts left, nothing of them stays: their configs and the password in the keyring."""
+    for path in [CONF] + [os.path.join(CONFS, f) for f in (os.listdir(CONFS) if os.path.isdir(CONFS) else [])]:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
     if shutil.which("secret-tool"):
         try:
             subprocess.run(["secret-tool", "clear", "application", "atlas-cloud", "config", CONF], capture_output=True, timeout=30)
         except (OSError, subprocess.SubprocessError):
             pass
+
+
+# ---- From one config for all accounts to one each (1.4.2) ---------------------------------------------------
+def _rclones():
+    """The rclones running now: (pid, their arguments)."""
+    out = []
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open("/proc/%s/cmdline" % pid, "rb") as f:
+                args = [a.decode("utf-8", "replace") for a in f.read().split(b"\0") if a]
+        except OSError:
+            continue
+        if args and os.path.basename(args[0]) == "rclone":
+            out.append((int(pid), args))
+    return out
+
+
+def _config_of(args):
+    return args[args.index("--config") + 1] if "--config" in args[:-1] else ""
+
+
+def _split_old():
+    """Gives each account a copy of the old shared config with only its own sign-in in it. The old config goes when
+    no rclone uses it any more (mount, below, starts an account's rclone again on its own config)."""
+    if not os.path.exists(CONF) or not exe():
+        return
+    with _move_lock:
+        for acct in accounts():
+            name, dest = acct["name"], _conf(acct["name"])
+            if os.path.exists(dest):
+                continue
+            os.makedirs(CONFS, mode=0o700, exist_ok=True)
+            part = dest + ".part"
+            try:
+                shutil.copyfile(CONF, part)
+                os.chmod(part, 0o600)
+                base = _base(name, part)
+                for other in _remotes(base) or []:
+                    if other != name:
+                        subprocess.run(base + ["config", "delete", other], stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+                os.replace(part, dest)
+            except (OSError, subprocess.SubprocessError):
+                try:
+                    os.remove(part)
+                except OSError:
+                    pass
+        if not any(_config_of(args) == CONF for _pid, args in _rclones()):
+            try:
+                os.remove(CONF)
+            except OSError:
+                pass
 
 
 # ---- Signing in: rclone asks its questions one at a time, and Atlas answers all but those only you can --------
@@ -172,17 +263,26 @@ def connect(a, state):
             return {"error": "Atlas needs rclone to connect cloud accounts."}
         service = str(a.get("service") or "")
         name = str(a.get("name") or "")
+        again = str(a.get("again") or "")     # an account already here, signing in to it again
         first = not name
         if first:
             if service not in SERVICES:
                 return {"error": "Atlas doesn't know that service."}
-            _ensure_config()
             taken = {x["name"] for x in accounts()}
-            name, n = SERVICES[service], 1
-            while name in taken:
-                n += 1
-                name = "%s %d" % (SERVICES[service], n)
-        base = _base()
+            if again:
+                if again not in taken:
+                    return {"error": "Atlas doesn't have that account."}
+                name = again
+                folder = os.path.join(MOUNTS, name)
+                if folder in mounts() and _unmount(folder).returncode:
+                    return {"error": "A program is using " + name + ". Close it, then try again."}
+            else:
+                name, n = SERVICES[service], 1
+                while name in taken:
+                    n += 1
+                    name = "%s %d" % (SERVICES[service], n)
+            _new_config(name)
+        base = _base(name)
 
     def said(ln):
         m = re.search(r"https?://127\.0\.0\.1:\d+/auth\S*", ln)
@@ -229,9 +329,11 @@ def connect(a, state):
 
 
 def _abandon(name):
+    if any(x["name"] == name for x in accounts()):
+        return        # signing in again, stopped: the account stays (needing signing in, as it did)
     try:
-        subprocess.run(_base() + ["config", "delete", name], stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
-    except (OSError, subprocess.SubprocessError):
+        os.remove(_conf(name))
+    except OSError:
         pass
     if not accounts():
         _forget_config()
@@ -239,8 +341,7 @@ def _abandon(name):
 
 def abandon(name):
     """A sign-in you stopped halfway (at Apple's code, say). An account already connected isn't touched."""
-    if not any(x["name"] == name for x in accounts()):
-        _abandon(name)
+    _abandon(name)
     return True
 
 
@@ -275,18 +376,32 @@ def _unmount(folder, force=False):
 
 def mount(name):
     """Shows an account at ~/Cloud/<name>. It stays there after Atlas closes, for other apps. The problem, or ""."""
+    _split_old()
     folder = os.path.join(MOUNTS, name)
     if folder in mounts():
         try:
             os.stat(folder)
-            _problems.pop(name, None)
-            return ""
+            old = [pid for pid, args in _rclones() if folder in args and _config_of(args) == CONF]
+            if not old:
+                _problems.pop(name, None)
+                return ""
+            # still running on the old shared config: started again on its own, unless it's busy (then next time)
+            if _uploading(name) or _unmount(folder).returncode:
+                _problems.pop(name, None)
+                return ""
+            for _ in range(50):
+                if not any(pid == p for p, _args in _rclones() for pid in old):
+                    break
+                time.sleep(0.1)
         except OSError:
             _unmount(folder, True)     # left behind by an rclone that ended
+    if not _signed_in(name):
+        _problems[name] = "Atlas no longer has its sign-in. Sign in again to reconnect."
+        return _problems[name]
     try:
         os.makedirs(folder, exist_ok=True)
         os.makedirs(CACHE, exist_ok=True)
-        cmd = _base() + ["mount", name + ":", folder, "--vfs-cache-mode", "full", "--vfs-cache-max-size", "5G", "--vfs-cache-max-age", "168h",
+        cmd = _base(name) + ["mount", name + ":", folder, "--vfs-cache-mode", "full", "--vfs-cache-max-size", "5G", "--vfs-cache-max-age", "168h",
                          "--dir-cache-time", "5m", "--cache-dir", CACHE, "--daemon", "--daemon-wait", "30s", "--log-file", LOG, "--log-level", "NOTICE"]
         # no pipes: the rclone left running would hold them, and this would wait for it
         r = subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=45, cwd="/")
@@ -304,6 +419,7 @@ def mount_all():
     if exe():
         for x in accounts():
             mount(x["name"])
+        _split_old()      # the old shared config goes, once nothing uses it
 
 
 def _uploading(name):
@@ -331,7 +447,10 @@ def disconnect(name, force=False):
         r = _unmount(folder, force)
         if r.returncode:
             return {"busy": "open"}
-    subprocess.run(_base() + ["config", "delete", name], stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
+    try:
+        os.remove(_conf(name))
+    except OSError:
+        pass
     with _lock:
         items = [x for x in accounts() if x["name"] != name]
         _save_accounts(items)

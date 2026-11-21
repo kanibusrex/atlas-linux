@@ -261,7 +261,10 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 [data-theme="graphite"] .age.a0, [data-theme="harbor"] .age.a0, [data-theme="sage"] .age.a0, [data-theme="claret"] .age.a0 { color: #1F8A57; }
 .row .cm { font-variant-numeric: tabular-nums; }
 
-.list { flex: 1 1 0; overflow: auto; position: relative; outline: 0; min-height: 90px; }
+.list { flex: 1 1 0; overflow: auto; position: relative; outline: 0; min-height: 90px; overflow-anchor: none; }
+/* the list draws only the rows in view and swaps them as it scrolls: WebKit's scroll anchoring would chase the
+   swapped rows and move the scroll position (the bar jumped about, and stopped matching where you were) */
+.mcol, .home, .space, .pv-body, .side-scroll { overflow-anchor: none; }
 .list.drop { background: color-mix(in srgb, var(--accent) 6%, transparent); box-shadow: inset 0 0 0 2px var(--sel-line); }
 .rows { position: absolute; left: 0; right: 0; top: 0; }
 .row { display: grid; align-items: center; height: var(--row); padding: 0 10px 0 8px; color: var(--text-2); border-radius: 6px; margin: 0 5px; font-size: 12.5px; cursor: default; }
@@ -1051,6 +1054,8 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   --c-pill: color-mix(in srgb, var(--c-deep) 60%, transparent);
   --c-glow: color-mix(in srgb, var(--accent) 45%, transparent);
   --c-acc-hi: color-mix(in srgb, var(--accent) 70%, var(--text));
+  --c-sel: var(--accent);      /* what's selected: the accent, unless the theme has a colour for it */
+  --c-on-acc: #fff;            /* text and icons on the accent */
 }
 [data-theme="graphite"], [data-theme="harbor"], [data-theme="sage"], [data-theme="claret"] {
   --c-deep: var(--bg);
@@ -1090,7 +1095,7 @@ body {
 .shead { font-size: 10px; letter-spacing: .1em; }
 .sitem { border-radius: 12px; }
 .sitem:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
-.sitem.here { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 26%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, transparent) 100%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 18px -6px var(--c-glow); }
+.sitem.here { background: linear-gradient(90deg, color-mix(in srgb, var(--c-sel) 26%, transparent) 0%, color-mix(in srgb, var(--c-sel) 8%, transparent) 100%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-sel) 30%, transparent), 0 0 18px -6px color-mix(in srgb, var(--c-sel) 45%, transparent); }
 .sitem.here .ico { filter: drop-shadow(0 0 5px var(--c-glow)); }
 .dbar i, .dmeter i, .cp-bar i, .srow .bar2 i { box-shadow: 0 0 8px var(--c-glow); }
 /* the tools along its bottom: one pill */
@@ -1140,17 +1145,22 @@ body {
 
 /* folder columns */
 .mi { border-radius: 999px; }
-.mi.here { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent), 0 0 14px -4px var(--c-glow); }
+.mi.on { background: color-mix(in srgb, var(--c-sel) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-sel) 22%, transparent); }
+.mi.here { background: linear-gradient(90deg, color-mix(in srgb, var(--c-sel) 40%, transparent) 0%, color-mix(in srgb, var(--c-sel) 16%, transparent) 100%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-sel) 38%, transparent), 0 0 14px -4px color-mix(in srgb, var(--c-sel) 45%, transparent); }
 
 /* the list */
 .head { font-size: 10px; letter-spacing: .1em; border-bottom-color: var(--c-hair-2); }
 .row { border-radius: 10px; margin: 0 8px; }
 .row:hover { background: color-mix(in srgb, var(--text) 4.5%, transparent); }
-.row.sel, [data-look="bold"] .row.sel { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 26%, transparent) 0%, color-mix(in srgb, var(--accent) 7%, transparent) 75%, transparent 100%);
-  box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent); }
-.row.sel.focus { box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+.row.sel, [data-look="bold"] .row.sel { background: linear-gradient(90deg, color-mix(in srgb, var(--c-sel) 26%, transparent) 0%, color-mix(in srgb, var(--c-sel) 7%, transparent) 75%, transparent 100%);
+  box-shadow: inset 3px 0 0 var(--c-sel), inset 0 0 0 1px color-mix(in srgb, var(--c-sel) 26%, transparent); }
+.row.sel.focus { box-shadow: inset 3px 0 0 var(--c-sel), inset 0 0 0 1px color-mix(in srgb, var(--c-sel) 50%, transparent); }
+.row.focus { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-sel) 45%, transparent); }
 .tile { border-radius: 14px; }
-.tile.sel, [data-look="bold"] .tile.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent), 0 0 22px -8px var(--c-glow); }
+.tile.sel, [data-look="bold"] .tile.sel { background: color-mix(in srgb, var(--c-sel) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-sel) 40%, transparent), 0 0 22px -8px color-mix(in srgb, var(--c-sel) 45%, transparent); }
+.row.drop, .tile.drop, .sitem.drop, .mi.drop { box-shadow: inset 0 0 0 1px var(--c-sel), 0 0 0 3px color-mix(in srgb, var(--c-sel) 15%, transparent); }
+.btn.pri, .btn.sm.pri { color: var(--c-on-acc); }
+.ritem.on svg, .ritem .badge { color: var(--c-on-acc); }
 .age.a0 { box-shadow: 0 0 10px -2px color-mix(in srgb, var(--ok) 45%, transparent); }
 .status { height: 30px; padding: 0 16px; }
 
@@ -1932,10 +1942,10 @@ body {
     if (isRecent(t)) { openRecent(t, { keep: true }); return; }
     if (t.mode === "search") { runSearch(t, t.search.query, t.search.opts); return; }
     if (t.mode === "space") { openSpace(t, t.space.path, true); return; }
-    var keepSel = Array.from(t.sel), sc = t.scroll;
+    // the scroll position stays where it is by then: you may have scrolled while the folder was read again
+    var keepSel = Array.from(t.sel);
     openPath(t, t.path, { keep: true }).then(function () {
       t.sel = new Set(keepSel.filter(function (p) { return t.entries.some(function (e) { return samePath(join(t.path, e.n), p); }); }));
-      t.scroll = sc;
       paintTab(t);
       if (!quiet) { toastSoft(); }
     });
@@ -2769,7 +2779,7 @@ body {
             return !!ok;
           },
           read: function (s) { return { shared: s.querySelector("#clSh").checked, fields: { client_id: s.querySelector("#clId").value.trim(), client_secret: s.querySelector("#clSe").value.trim() } }; } }]
-      }).then(function (v) { if (v) { cloudRun({ service: k, shared: v.shared, fields: v.fields }, name); } });
+      }).then(function (v) { if (v) { cloudRun({ service: k, shared: v.shared, fields: v.fields, again: keep.again }, name); } });
     }
     if (k === "iclouddrive") {
       return dialog({ title: "Connect iCloud Drive", icon: "cloud", sub: "Experimental: Apple offers no official way in on Linux, so this may stop working when Apple changes things.",
@@ -2777,9 +2787,13 @@ body {
           "<div class='fld'><label for='clPw'>Password</label><input id='clPw' type='password' autocomplete='off'></div>" +
           "<div class='hint'>Atlas keeps your password, encrypted, to stay signed in. \u201CAccess iCloud Data on the Web\u201D must be on, on your Apple device. Apple will send a code to your devices next, and with Advanced Data Protection on, a request to approve.</div>",
         buttons: [{ label: "Cancel", value: null }, { label: "Sign in", pri: true, read: function (s) { return { apple_id: s.querySelector("#clAp").value.trim(), password: s.querySelector("#clPw").value }; } }]
-      }).then(function (v) { if (v) { if (!v.apple_id || !v.password) { return cloudDetails(k, name, { apple_id: v.apple_id, error: "Fill in both." }); } cloudRun({ service: k, fields: { apple_id: v.apple_id }, password: v.password }, name, v); } });
+      }).then(function (v) { if (v) { if (!v.apple_id || !v.password) { return cloudDetails(k, name, { apple_id: v.apple_id, error: "Fill in both.", again: keep.again }); } cloudRun({ service: k, fields: { apple_id: v.apple_id }, password: v.password, again: keep.again }, name, v); } });
     }
-    cloudRun({ service: k }, name);
+    cloudRun({ service: k, again: keep.again }, name);
+  }
+  // an account Atlas has lost the sign-in for (or one you want to sign in to afresh): the same steps, keeping its name and folder
+  function cloudAgain(c) {
+    api("cloudinfo").then(function (info) { cloudDetails(c.service, info.services[c.service] || c.label, { again: c.label }); }).catch(fail);
   }
   // one go at signing in: waits in a dialog (you may be in your browser), and may come back with a question, such as Apple's code
   function cloudRun(args, name, keep) {
@@ -5332,9 +5346,16 @@ body {
     { id: "abyss", label: "Abyss", dark: true, bold: true, bg: "#040d1f", fg: "#eaf1ff", accent: "#3f7dff", accent2: "#00d4ff" },
     { id: "solar", label: "Solar", dark: false, bold: true, bg: "#fff5ea", fg: "#24160c", accent: "#e8590c", accent2: "#e0315b" },
     { id: "prism", label: "Prism", dark: false, bold: true, bg: "#f4f1ff", fg: "#1a1530", accent: "#6d28d9", accent2: "#db2777" },
-    { id: "lagoon", label: "Lagoon", dark: false, bold: true, bg: "#ecf8f7", fg: "#0d1f1e", accent: "#0f766e", accent2: "#2563eb" }
+    { id: "lagoon", label: "Lagoon", dark: false, bold: true, bg: "#ecf8f7", fg: "#0d1f1e", accent: "#0f766e", accent2: "#2563eb" },
+    // exact: every colour given, none worked out (the control-room look Atlas's cards were drawn from, with its red for selections)
+    { id: "console", label: "Console", dark: true, exact: true, accent: "#f6cc8a", sel: "#de3536", vars: {
+      "--bg": "#0a1314", "--c-deep": "#06090b", "--surface": "#151c1f", "--surface-2": "#182023", "--surface-3": "#1f3537", "--line": "#3c4548",
+      "--text": "#ffffff", "--text-2": "#d6dcdd", "--muted": "#849092", "--accent": "#f6cc8a", "--accent-2": "#a090e0", "--accent-soft": "rgba(246,204,138,.14)",
+      "--folder": "#f6cc8a", "--head": "#1f3537", "--dark": "1", "--c-on-acc": "#1b1407",
+      "--c-sel": "#de3536", "--sel": "rgba(222,53,54,.24)", "--sel-line": "rgba(222,53,54,.62)",
+      "--c-card": "linear-gradient(180deg, rgba(31,53,55,.94) 0%, rgba(16,28,33,.9) 100%)", "--c-acc-hi": "#f6cc8a" } }
   ];
-  THEMES.forEach(function (t) { if (t.bold) { t.sw = t.accent; } });
+  THEMES.forEach(function (t) { if (t.bold || t.exact) { t.sw = t.accent; } });
   /* ---- The Atlas icon: one drawing, in the theme's accent colour --------------------------------- */
   function hexMix(a, b, t) {
     var p = function (h) { return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]; };
@@ -5398,7 +5419,7 @@ body {
   // Atlas's own dark or light look, coloured from the palette Omarchy gives its terminals and bar, and
   // changed as soon as the Omarchy theme is
   var omarchyPal = null;
-  var OMVARS = ["--bg", "--surface", "--surface-2", "--surface-3", "--line", "--text", "--text-2", "--muted", "--accent", "--accent-soft", "--dark", "--folder", "--accent-2", "--head", "--sel"];
+  var OMVARS = ["--bg", "--surface", "--surface-2", "--surface-3", "--line", "--text", "--text-2", "--muted", "--accent", "--accent-soft", "--dark", "--folder", "--accent-2", "--head", "--sel", "--c-deep", "--c-on-acc", "--c-sel", "--c-card", "--c-acc-hi", "--sel-line"];
   function hexLum(h) {
     return [1, 3, 5].map(function (i) { var c = parseInt(h.slice(i, i + 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); })
       .reduce(function (n, c, k) { return n + c * [0.2126, 0.7152, 0.0722][k]; }, 0);
@@ -5447,7 +5468,11 @@ body {
   }
   function paintTheme(th) {
     var root = D.documentElement;
-    if (th.bold) {
+    if (th.exact) {
+      root.removeAttribute("data-look");
+      root.setAttribute("data-theme", th.dark ? "graphitedk" : "graphite");
+      Object.keys(th.vars).forEach(function (k) { root.style.setProperty(k, th.vars[k]); });
+    } else if (th.bold) {
       // Atlas's own dark or light look underneath, in this theme's colours
       root.setAttribute("data-theme", th.dark ? "graphitedk" : "graphite");
       root.setAttribute("data-look", "bold");
@@ -5509,7 +5534,7 @@ body {
       sw: omarchyPal ? omarchyLook(omarchyPal).accent : "#888888", run: function () { setTheme("omarchy"); } }];
     var group = function (head, pick) {
       return [{ head: head }].concat(THEMES.filter(pick).map(function (t) {
-        return { label: t.label + (S.theme === t.id ? "  \u2713" : ""), sw: t.bold ? "linear-gradient(135deg, " + t.accent + ", " + t.accent2 + ")" : t.sw, run: function () { setTheme(t.id); } };
+        return { label: t.label + (S.theme === t.id ? "  \u2713" : ""), sw: t.bold ? "linear-gradient(135deg, " + t.accent + ", " + t.accent2 + ")" : t.exact ? "linear-gradient(135deg, " + t.accent + " 50%, " + t.sel + " 50%)" : t.sw, run: function () { setTheme(t.id); } };
       }));
     };
     // two columns' worth: the menu sits beside the button, as low as the window allows
@@ -5557,7 +5582,11 @@ body {
     var cm = ev.target.closest("[data-cloudmount]");
     if (cm) {
       toast("Connecting to " + cm.getAttribute("data-cloudmount") + "\u2026", { ms: 2500 });
-      api("cloudmount", { name: cm.getAttribute("data-cloudmount") }).then(function (r) { if (r.problem) { toast(r.problem, { bad: true }); } return loadDrives(); }).catch(fail);
+      var cAcct = clouds.filter(function (c) { return c.own && c.label === cm.getAttribute("data-cloudmount"); })[0];
+      api("cloudmount", { name: cm.getAttribute("data-cloudmount") }).then(function (r) {
+        if (r.problem) { toast(r.problem, cAcct && cAcct.service ? { bad: true, ms: 10000, action: "Sign in again", run: function () { cloudAgain(cAcct); } } : { bad: true }); }
+        return loadDrives();
+      }).catch(fail);
       return;
     }
     if (ev.target.closest("[data-addsrv]")) { addServer(); return; } if (ev.target.closest("[data-mapdrive]")) { mapDrive(); return; } if (ev.target.closest("[data-smb]")) { connectShare(); return; } var vb = ev.target.closest("[data-vol]"); if (vb) { mountVol(vb.getAttribute("data-vol")); return; }
@@ -5605,7 +5634,11 @@ body {
     var rem = LINUX && drives.filter(function (d) { return d.path === path && d.type === "Removable"; })[0];
     if (rem) { items.push("-"); items.push({ label: "Eject", icon: "up", run: function () { ejectDrive(rem); } }); items.push({ label: "What's using it", icon: "alert", run: function () { whoIsUsing([rem.path]); } }); }
     var ownCloud = clouds.filter(function (c) { return c.own && c.path === path; })[0];
-    if (ownCloud) { items.push("-"); items.push({ label: "Disconnect\u2026", icon: "x", linux: true, run: function () { cloudDisconnect(ownCloud); } }); }
+    if (ownCloud) {
+      items.push("-");
+      if (ownCloud.service) { items.push({ label: "Sign in again\u2026", icon: "refresh", linux: true, run: function () { cloudAgain(ownCloud); } }); }
+      items.push({ label: "Disconnect\u2026", icon: "x", linux: true, run: function () { cloudDisconnect(ownCloud); } });
+    }
     var drv = drives.filter(function (d) { return d.path.toUpperCase() === String(path).toUpperCase() && d.type === "Network"; })[0];
     if (drv) {
       items.push("-");
