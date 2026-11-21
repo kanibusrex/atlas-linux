@@ -1032,6 +1032,200 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
 @media (prefers-reduced-motion: reduce) {
   [data-look="bold"] body::before, [data-look="bold"] .tab.on.fresh::after { animation: none; }
 }
+
+/* ================================================================================================
+   Console: Atlas as a control room. Floating glass cards on a deep, softly lit backdrop with a faint
+   dot grid; pills for the tools; one glowing accent; big, light numbers. Every colour still comes from
+   the theme, and nothing here moves on its own (an endless animation costs a slow PC a lot).
+   ================================================================================================ */
+:root {
+  --c-gap: 10px;
+  --c-r: 18px;
+  --c-deep: color-mix(in srgb, var(--bg) 78%, #000);
+  --c-hair: color-mix(in srgb, var(--text) 9%, transparent);
+  --c-hair-2: color-mix(in srgb, var(--text) 6%, transparent);
+  --c-card: linear-gradient(180deg, color-mix(in srgb, var(--surface) 70%, transparent) 0%, color-mix(in srgb, var(--surface) 46%, transparent) 100%);
+  --c-tile: color-mix(in srgb, var(--text) 3.5%, transparent);
+  --c-hi: inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
+  --c-shadow: 0 1px 0 rgba(0,0,0,.22), 0 18px 48px rgba(0,0,0,.36);
+  --c-pill: color-mix(in srgb, var(--c-deep) 60%, transparent);
+  --c-glow: color-mix(in srgb, var(--accent) 45%, transparent);
+  --c-acc-hi: color-mix(in srgb, var(--accent) 70%, var(--text));
+}
+[data-theme="graphite"], [data-theme="harbor"], [data-theme="sage"], [data-theme="claret"] {
+  --c-deep: var(--bg);
+  --c-hair: color-mix(in srgb, var(--text) 10%, transparent);
+  --c-hair-2: color-mix(in srgb, var(--text) 7%, transparent);
+  --c-card: linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, transparent) 0%, color-mix(in srgb, var(--surface) 80%, transparent) 100%);
+  --c-tile: color-mix(in srgb, var(--accent) 4%, var(--surface));
+  --c-hi: inset 0 1px 0 rgba(255,255,255,.7);
+  --c-shadow: 0 1px 2px rgba(16,24,40,.06), 0 14px 36px rgba(16,24,40,.09);
+  --c-pill: color-mix(in srgb, var(--bg) 70%, transparent);
+  --c-glow: color-mix(in srgb, var(--accent) 30%, transparent);
+  --c-acc-hi: var(--accent);
+}
+/* the backdrop: a deep version of the theme's background, lit from above, with a dot grid over it */
+body {
+  background:
+    radial-gradient(70% 55% at 55% -12%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%),
+    radial-gradient(45% 45% at -5% 105%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%),
+    var(--c-deep);
+}
+#app { background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--text) 7%, transparent) 1px, transparent 1.5px); background-size: 22px 22px; }
+
+/* the side bar, the panes, the preview and the copies: cards floating on it */
+.side { margin: var(--c-gap) 0 var(--c-gap) var(--c-gap); border-radius: var(--c-r); border: 1px solid var(--c-hair); background: var(--c-card); box-shadow: var(--c-hi), var(--c-shadow); }
+.work { padding: var(--c-gap); gap: var(--c-gap); }
+.panes { gap: var(--c-gap); }
+.pane, .panes.dual .pane + .pane, .panes.dual .pane.active + .pane { border: 1px solid var(--c-hair); border-radius: var(--c-r); background: var(--c-card); box-shadow: var(--c-hi), var(--c-shadow); }
+.panes.dual .pane.active { border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--c-hair)); box-shadow: var(--c-hi), var(--c-shadow), 0 0 32px -8px var(--c-glow); }
+.panes.dual .pane.active .tabs { box-shadow: none; }
+.preview { border: 1px solid var(--c-hair); border-radius: var(--c-r); background: var(--c-card); box-shadow: var(--c-hi), var(--c-shadow); }
+.preview.dock { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.pickbar { margin: 0 var(--c-gap) var(--c-gap); border: 1px solid var(--c-hair); border-radius: 16px; background: var(--c-card); box-shadow: var(--c-hi), var(--c-shadow); }
+#app.picking .work { padding-bottom: var(--c-gap); }
+
+/* side bar */
+.side-pin { padding-top: 12px; }
+.shead { font-size: 10px; letter-spacing: .1em; }
+.sitem { border-radius: 12px; }
+.sitem:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.sitem.here { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 26%, transparent) 0%, color-mix(in srgb, var(--accent) 8%, transparent) 100%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 0 18px -6px var(--c-glow); }
+.sitem.here .ico { filter: drop-shadow(0 0 5px var(--c-glow)); }
+.dbar i, .dmeter i, .cp-bar i, .srow .bar2 i { box-shadow: 0 0 8px var(--c-glow); }
+/* the tools along its bottom: one pill */
+.side-tools { margin: 4px 8px 8px; padding: 4px; border-radius: 999px; background: var(--c-pill); border: 1px solid var(--c-hair); box-shadow: inset 0 1px 3px rgba(0,0,0,.14); }
+.side-tools::before { content: none; }
+.side-tools .ritem { padding: 6px 0; border-radius: 999px; }
+.side-tools .ritem::after { border-radius: 999px; }
+
+/* tabs: pills */
+.tabs { align-items: center; padding: 8px 10px 2px; min-height: 42px; }
+.tstrip { align-items: center; gap: 4px; align-self: center; }
+.tab { height: 29px; border-radius: 999px; padding: 0 6px 0 12px; border: 1px solid transparent; }
+.tab:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.tab.on, [data-theme="graphite"] .tab.on, [data-theme="harbor"] .tab.on, [data-theme="sage"] .tab.on, [data-theme="claret"] .tab.on {
+  background: color-mix(in srgb, var(--text) 7%, transparent); border-color: var(--c-hair); box-shadow: var(--c-hi); }
+.tab.on::after, [data-look="bold"] .tab.on::after { top: auto; bottom: -1px; left: 50%; right: auto; width: 22px; margin-left: -11px; height: 2px; border-radius: 2px; box-shadow: 0 0 8px var(--accent); }
+.tab.on > .ico { filter: drop-shadow(0 0 5px var(--c-glow)); }
+.tab .tx { border-radius: 999px; }
+.tadd, .tsc { margin: 0 0 0 2px; border-radius: 999px; }
+
+/* the path and the search box: pills */
+.bar { padding: 4px 10px 6px; gap: 6px; }
+.crumbs, .find input { height: 32px; border-radius: 999px; border: 1px solid var(--c-hair); background: var(--c-pill); box-shadow: inset 0 1px 3px rgba(0,0,0,.14); }
+.crumbs { padding: 0 6px; }
+.crumbs.edit, .find input:focus { border-color: color-mix(in srgb, var(--accent) 50%, var(--c-hair)); box-shadow: inset 0 1px 3px rgba(0,0,0,.14), 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
+.crumb { border-radius: 999px; padding: 2px 8px; }
+.crumb.last, [data-theme="graphitedk"] .crumb.last, [data-theme="midnight"] .crumb.last, [data-theme="spruce"] .crumb.last, [data-theme="aubergine"] .crumb.last { color: var(--c-acc-hi); }
+.find input { padding-left: 32px; }
+.find > .ico { top: 8.5px; left: 12px; }
+.find .fx { top: 4.5px; right: 4px; }
+.ib { border-radius: 999px; }
+.ib:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 7%, transparent); }
+
+/* the folder's name, big, with its tools in a floating pill */
+.ttl { padding: 10px 12px 10px 18px; min-height: 54px; gap: 6px; }
+.ttl h2 { font-size: 22px; font-weight: 600; letter-spacing: -.02em; }
+.ttl h2 .fi { filter: drop-shadow(0 0 10px var(--c-glow)); }
+.ttl h2 .fi, .ttl h2 .fi svg, .ttl h2 > .ico { width: 21px; height: 21px; }
+:root:not([data-look]) .ttl h2 .tn { background-image: linear-gradient(90deg, var(--text) 0%, var(--text) 40%, var(--c-acc-hi) 100%); }
+.ttl .tsub { margin: 1px 0 0 8px; padding: 2px 10px; border-radius: 999px; font-size: 11px; color: var(--c-acc-hi); background: color-mix(in srgb, var(--accent) 11%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent); }
+.ttl .tsub:empty { display: none; }
+.tgrp { display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: var(--c-pill); border: 1px solid var(--c-hair); box-shadow: var(--c-hi), 0 6px 18px rgba(0,0,0,.18); flex: none; }
+.tgrp .ib, .ttl .tgrp .ib { width: 29px; height: 29px; }
+.tsep { width: 1px; height: 16px; margin: 0 3px; background: var(--c-hair); flex: none; }
+@container (max-width: 520px) { .tsep { display: none; } .ttl { padding-left: 14px; } }
+.ttl .tgrp .ib.on { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--c-acc-hi); box-shadow: 0 0 12px -2px var(--c-glow); }
+
+/* folder columns */
+.mi { border-radius: 999px; }
+.mi.here { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent), 0 0 14px -4px var(--c-glow); }
+
+/* the list */
+.head { font-size: 10px; letter-spacing: .1em; border-bottom-color: var(--c-hair-2); }
+.row { border-radius: 10px; margin: 0 8px; }
+.row:hover { background: color-mix(in srgb, var(--text) 4.5%, transparent); }
+.row.sel, [data-look="bold"] .row.sel { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 26%, transparent) 0%, color-mix(in srgb, var(--accent) 7%, transparent) 75%, transparent 100%);
+  box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent); }
+.row.sel.focus { box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+.tile { border-radius: 14px; }
+.tile.sel, [data-look="bold"] .tile.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent), 0 0 22px -8px var(--c-glow); }
+.age.a0 { box-shadow: 0 0 10px -2px color-mix(in srgb, var(--ok) 45%, transparent); }
+.status { height: 30px; padding: 0 16px; }
+
+/* the preview: a big title, an orb for an icon, facts as small capitals */
+.pv-head { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.pv-name { font-size: 19px; font-weight: 600; letter-spacing: -.015em; padding: 14px 16px 3px; }
+.preview.dock .pv-name { font-size: 17px; color: var(--text); }
+.pv-kind { padding: 0 16px 10px; }
+.pv-acts { padding: 0 16px 12px; gap: 6px; }
+.pv-acts::after { left: 16px; right: 16px; }
+.btn { border-radius: 999px; }
+.btn.sm { height: 26px; padding: 0 11px; background: color-mix(in srgb, var(--text) 5%, transparent); border: 1px solid var(--c-hair); box-shadow: none; }
+.btn.sm:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, var(--c-hair)); }
+.btn.pri, .btn.sm.pri { box-shadow: 0 0 18px -4px var(--c-glow), inset 0 1px 0 rgba(255,255,255,.22); border-color: transparent; }
+.pv-facts { padding: 6px 16px 16px; gap: 0 12px; }
+.pv-facts dt, .pv-facts dd { padding: 7px 0; border-bottom: 1px solid var(--c-hair-2); }
+.pv-facts dt { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding-top: 9px; }
+.pv-stage, .preview.dock .pv-stage { background: radial-gradient(closest-side at 50% 50%, color-mix(in srgb, var(--accent) 13%, transparent), transparent), color-mix(in srgb, var(--c-deep) 35%, transparent); }
+.preview:not(.dock) .pv-stage { margin: 4px 12px 0; border-radius: 14px; border: 1px solid var(--c-hair-2); overflow: hidden; }
+.preview:not(.dock) .pv-stage:has(> .fi) { min-height: 230px; }
+.preview .pv-stage > .fi { width: 108px; height: 108px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--accent) 34%, var(--surface)) 0%, color-mix(in srgb, var(--accent) 10%, var(--surface)) 62%, color-mix(in srgb, var(--accent) 4%, var(--surface)) 100%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent), 0 0 0 15px color-mix(in srgb, var(--accent) 4%, transparent), 0 0 0 16px color-mix(in srgb, var(--accent) 14%, transparent),
+    0 0 0 34px color-mix(in srgb, var(--accent) 2.5%, transparent), 0 0 0 35px color-mix(in srgb, var(--accent) 8%, transparent), 0 0 56px 14px color-mix(in srgb, var(--accent) 20%, transparent), inset 0 1px 0 rgba(255,255,255,.12); }
+.preview .pv-stage > .fi svg, .preview .pv-stage > .fi img, .preview.dock .pv-stage > .fi svg, .preview.dock .pv-stage > .fi img { width: 50px; height: 50px; filter: drop-shadow(0 0 12px var(--c-glow)); }
+.preview.dock .pv-stage > .fi { width: 88px; height: 88px; }
+.preview.dock .pv-stage { border-radius: 14px; }
+
+/* a folder at a glance: what changed lately, and how much is in it */
+.pv-dash { display: grid; gap: 10px; padding: 12px 12px 4px; }
+.pv-pulse, .pv-stats .st { border-radius: 14px; background: var(--c-tile); border: 1px solid var(--c-hair); box-shadow: var(--c-hi); }
+.pv-pulse { padding: 13px 14px 11px; min-width: 0; }
+.pp-h { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.pp-n { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 12px; }
+.pp-n b { font-size: 34px; line-height: 1; font-weight: 300; letter-spacing: -.03em; color: var(--text); }
+.pp-n span { color: var(--muted); font-size: 12px; }
+.pp-bars { display: flex; align-items: flex-end; gap: 4px; height: 54px; }
+.pp-bars i { flex: 1; border-radius: 3px 3px 1px 1px; background: color-mix(in srgb, var(--text) 13%, transparent); }
+.pp-bars i.hot { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, #fff) 0%, var(--accent) 100%); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent); }
+.pp-x { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--muted); }
+.pv-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.pv-stats .st { padding: 11px 12px 10px; min-width: 0; }
+.pv-stats b { display: block; font-size: 24px; line-height: 1.1; font-weight: 300; letter-spacing: -.02em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-stats span { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preview:not(.dock) .pv-dash { order: 5; flex: none; }
+/* docked under the list: the chart and the numbers side by side, and the path (the bar above shows it) left out */
+.preview.dock .pv-body:has(> .pv-dash) { grid-template-rows: auto auto auto minmax(0, 1fr); }
+.preview.dock .pv-dash { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-content: start; min-height: 0; overflow: auto; padding: 2px 14px 10px; }
+.preview.dock .pv-dash .pv-stats { grid-template-columns: 1fr 1fr; align-content: start; }
+.preview.dock .pv-dash .pv-stats .st:last-child { grid-column: 1 / -1; }
+.preview.dock .pv-body:has(> .pv-dash) > .pv-kind { display: none; }
+.preview.dock .pv-pulse { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: 16px; padding: 10px 12px; }
+.preview.dock .pp-h { grid-column: 1 / -1; }
+.preview.dock .pp-n { flex-direction: column; align-items: flex-start; gap: 2px; margin: 6px 0 0; }
+.preview.dock .pp-n b { font-size: 26px; }
+.preview.dock .pp-n span { font-size: 11px; }
+.preview.dock .pp-bars { height: 42px; margin-top: 6px; }
+.preview.dock .pp-x { display: none; }
+.preview.dock .pv-stats { gap: 8px; }
+.preview.dock .pv-stats .st { padding: 7px 10px; }
+.preview.dock .pv-stats b { font-size: 18px; }
+.preview.dock .pv-stats span { margin-top: 1px; font-size: 10.5px; }
+.preview.dock .pv-body:has(> .pv-dash) > #pvFacts { display: none; }
+@container (max-width: 640px) { .preview.dock .pv-dash { grid-template-columns: minmax(0, 1fr); } }
+
+/* the start screen: tiles and drives as cards */
+.qtile, .dcard { background: var(--c-tile); border: 1px solid var(--c-hair); border-radius: 14px; box-shadow: var(--c-hi); }
+.qtile:hover, .dcard:hover { background: color-mix(in srgb, var(--accent) 9%, var(--c-tile)); border-color: color-mix(in srgb, var(--accent) 40%, var(--c-hair)); box-shadow: var(--c-hi), 0 0 24px -8px var(--c-glow); }
+.qtile .qi, .dtop .qi { box-shadow: 0 0 14px -4px var(--c-glow); }
+.goto input { border-radius: 999px; background: var(--c-pill); border-color: var(--c-hair); }
+
+/* menus and dialogs: the same glass */
+.menu, .dlg, .pal { border-color: var(--c-hair); }
+.chip { border-color: var(--c-hair); }
+.chip.on { box-shadow: 0 0 12px -4px var(--c-glow); }
 </style>
 </head>
 <body>
@@ -1566,13 +1760,17 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
       "</div>" +
       "<div class='mill' hidden></div>" +
       "<div class='ttl'><h2></h2><span class='tsub'></span><span class='grow'></span>" +
+        "<button class='btn sm dng' data-a='emptytrash' hidden>" + svg("trash") + "Empty Trash</button>" +
+        // the folder's tools, together in one floating pill
+        "<span class='tgrp'>" +
         "<button class='ib' data-a='back' title='Back (Alt+Left)'>" + svg("back") + "</button>" +
         "<button class='ib' data-a='fwd' title='Forward (Alt+Right)'>" + svg("fwd") + "</button>" +
         "<button class='ib' data-a='up' title='Up a folder (Alt+Up)'>" + svg("up") + "</button>" +
+        "<i class='tsep'></i>" +
         "<button class='ib' data-a='refresh' title='Refresh (F5)'>" + svg("refresh") + "</button>" +
         "<button class='ib' data-a='new' title='New folder (Ctrl+Shift+N)'>" + svg("newfolder") + "</button>" +
-        "<button class='btn sm dng' data-a='emptytrash' hidden>" + svg("trash") + "Empty Trash</button>" +
         "<button class='ib' data-a='view' title='Details or tiles (Ctrl+Shift+V)'>" + svg("grid") + "</button>" +
+        "</span>" +
       "</div>" +
       "<div class='chips' hidden></div>" +
       "<div class='banner' hidden></div>" +
@@ -3591,9 +3789,25 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
     if (!sel.length) {
       if (t.mode === "folder" && t.path) {
         var files = 0, bytes = 0, dirs = 0;
-        t.entries.forEach(function (e) { if (e.d) { dirs++; } else { files++; bytes += e.s; } });
+        // when things in it last changed, newest on the right: an hour, a day, 3 days, a week... five years and older
+        var SPANS = [3600, 86400, 3 * 86400, 7 * 86400, 14 * 86400, 30 * 86400, 91 * 86400, 182 * 86400, 365 * 86400, 730 * 86400, 1826 * 86400, Infinity];
+        var act = SPANS.map(function () { return 0; }), now = Date.now(), dated = 0;
+        t.entries.forEach(function (e) {
+          if (e.d) { dirs++; } else { files++; bytes += e.s; }
+          if (e.m) { var s = Math.max(0, (now - e.m) / 1000), i = 0; while (s >= SPANS[i]) { i++; } act[i]++; dated++; }
+        });
+        var recent = act.slice(0, 6).reduce(function (a, b) { return a + b; }, 0), top = Math.max.apply(null, act) || 1;
+        var bars = act.slice().reverse().map(function (n, i) {
+          return "<i class='" + (i >= 6 && n ? "hot" : "") + "' style='height:" + (n ? Math.max(8, Math.round(n / top * 100)) : 4) + "%' title='" + esc(plural(n, "item")) + "'></i>";
+        }).join("");
+        var stat = function (n, label) { return "<div class='st'><b>" + esc(n) + "</b><span>" + esc(label) + "</span></div>"; };
         body.innerHTML = "<div class='pv-stage'><span class='fi'>" + folderSvg() + "</span></div><div class='pv-name'>" + esc(baseName(t.path)) + "</div><div class='pv-kind'>" + plural(dirs, "folder") + ", " + plural(files, "file") + " (" + fmtSize(bytes) + " not counting folders)</div>" +
-          "<div class='pv-acts'><button class='btn sm' data-pv='space'>" + svg("pie") + "What's taking up space</button><button class='btn sm' data-pv='copypath'>" + svg("link") + "Copy path</button></div><div id='pvFacts'>" + factRows([["Location", t.path]]) + "</div>";
+          "<div class='pv-acts'><button class='btn sm' data-pv='space'>" + svg("pie") + "What's taking up space</button><button class='btn sm' data-pv='copypath'>" + svg("link") + "Copy path</button></div>" +
+          "<div class='pv-dash'><div class='pv-pulse'><div class='pp-h'>Changed in the last 30 days</div>" +
+            "<div class='pp-n'><b>" + (dated ? Math.round(recent / dated * 100) : 0) + "%</b><span>" + recent + " of " + plural(dated, "item") + "</span></div>" +
+            "<div class='pp-bars'>" + bars + "</div><div class='pp-x'><span>5 years +</span><span>A month ago</span><span>Now</span></div></div>" +
+            "<div class='pv-stats'>" + stat(dirs, dirs === 1 ? "Folder" : "Folders") + stat(files, files === 1 ? "File" : "Files") + stat(fmtSize(bytes), "In its files") + "</div></div>" +
+          "<div id='pvFacts'>" + factRows([["Location", t.path]]) + "</div>";
       } else { body.innerHTML = "<div class='pv-none'>Select a file to see it here.</div>"; }
       return;
     }
@@ -5604,7 +5818,7 @@ html.atlas-default [data-winexp], html.linux [data-pv=access], html.linux [data-
   loadDrives().then(function () { if (LINUX) { reconnectShares(); } });
   panes.forEach(function (p) { p.tabs.forEach(function (t) { openPath(t, t.path, { replace: true, select: t === nt && startSelect ? [startSelect] : undefined }); }); });
   focusList(activePane);
-  W.__fd = { panes: function () { return panes; }, cur: cur, S: S, openPath: openPath, viewOf: viewOf };
+  W.__fd = { panes: function () { return panes; }, cur: cur, S: S, openPath: openPath, viewOf: viewOf, setTheme: setTheme };
 })();
 </script>
 </body>
