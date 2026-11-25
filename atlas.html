@@ -413,6 +413,8 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .pv-grip { display: none; }
 /* on the right: half the window by default (drag its edge), with a document taking all the height it can */
 body.pvright #app:not(.picking) .work { grid-template-columns: minmax(0, 1fr) minmax(0, var(--pvw, 50%)); }
+/* preview closed, or docked inside a pane: no second column, or its gap would widen the right edge */
+#app .work:not(:has(> .preview:not([hidden]))) { grid-template-columns: minmax(0, 1fr); }
 body.pvright .preview:not(.dock) { width: auto; position: relative; }
 .preview:not(.dock) .pv-grip { display: block; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 3; }
 .preview:not(.dock) .pv-grip:hover { background: color-mix(in srgb, var(--accent) 45%, transparent); }
@@ -2406,6 +2408,10 @@ body {
 
   /* ---- The list, drawn only where it can be seen -------------------------------------------------- */
   var TILE_W = 118, TILE_H = 136, ROW = 26;
+  /* Grid columns: as many as fit, with the width left over shared out between them, so the gap after the
+     last column matches the one before the first (it used to all land on the right) */
+  function gridCols(list) { return Math.max(1, Math.floor((list.clientWidth - 20) / TILE_W)); }
+  function gridPitch(list, cols) { return Math.max(TILE_W, Math.floor((list.clientWidth - 20) / cols * 100) / 100); }
   function paintList(i, reset) {
     var p = panes[i], t = tabOf(p), list = p.el.querySelector(".list");
     var spacer = list.querySelector(".spacer");
@@ -2436,21 +2442,24 @@ body {
     var H = list.clientHeight || 600, top = list.scrollTop;
     var html = "";
     if (t.view === "grid") {
-      var cols = Math.max(1, Math.floor((list.clientWidth - 20) / TILE_W));
-      var rows = Math.ceil(v.length / cols);
+      var cols = gridCols(list);
+      spacer.style.height = (Math.ceil(v.length / cols) * TILE_H + 20) + "px";
+      // measured again: that height may have just brought the scroll bar, which takes width from the tiles
+      cols = gridCols(list);
+      var pitch = gridPitch(list, cols), rows = Math.ceil(v.length / cols);
       spacer.style.height = (rows * TILE_H + 20) + "px";
       var r0 = Math.max(0, Math.floor(top / TILE_H) - 2), r1 = Math.min(rows, Math.ceil((top + H) / TILE_H) + 2);
       for (var r = r0; r < r1; r++) {
         for (var c = 0; c < cols; c++) {
           var k = r * cols + c;
           if (k >= v.length) { break; }
-          html += tileHtml(t, v[k], k, r, c);
+          html += tileHtml(t, v[k], k, r, c, pitch);
         }
       }
       spacer.innerHTML = "<div class='grid' style='grid-template-columns:repeat(" + cols + ", " + (TILE_W - 6) + "px);position:relative'>" + html + "</div>";
       var g = spacer.firstChild;
       g.style.position = "absolute"; g.style.display = "block";
-      spacer._drawn = { t: t, v: v, grid: true, cols: cols, a: r0 * cols, b: Math.min(v.length, r1 * cols) };
+      spacer._drawn = { t: t, v: v, grid: true, cols: cols, pitch: pitch, a: r0 * cols, b: Math.min(v.length, r1 * cols) };
       return;
     }
     var RH = ROW;
@@ -2471,8 +2480,8 @@ body {
     if (!d || d.t !== t || d.v !== v || d.grid !== grid || (t.scrollTo != null && t.scrollTo >= 0) || !box || box.childElementCount !== d.b - d.a) { paintList(i); return; }
     var H = list.clientHeight || 600, top = list.scrollTop, per = 1, lo, hi, a, b;
     if (grid) {
-      per = Math.max(1, Math.floor((list.clientWidth - 20) / TILE_W));
-      if (per !== d.cols) { paintList(i); return; }
+      per = gridCols(list);
+      if (per !== d.cols || gridPitch(list, per) !== d.pitch) { paintList(i); return; }
       var rows = Math.ceil(v.length / per);
       lo = Math.floor(top / TILE_H) * per; hi = Math.min(v.length, Math.ceil((top + H) / TILE_H) * per);
       a = Math.max(0, Math.floor(top / TILE_H) - 2) * per; b = Math.min(v.length, Math.min(rows, Math.ceil((top + H) / TILE_H) + 2) * per);
@@ -2482,7 +2491,7 @@ body {
     }
     // what is in sight, and a little more each way, is drawn already
     if (d.a <= Math.max(0, lo - 2 * per) && d.b >= Math.min(v.length, hi + 2 * per)) { return; }
-    var item = function (n) { return grid ? tileHtml(t, v[n], n, Math.floor(n / per), n % per) : rowHtml(t, v[n], n, n * ROW + 4); };
+    var item = function (n) { return grid ? tileHtml(t, v[n], n, Math.floor(n / per), n % per, d.pitch) : rowHtml(t, v[n], n, n * ROW + 4); };
     var html = "", n;
     if (b <= d.a || a >= d.b) {
       for (n = a; n < b; n++) { html += item(n); }
@@ -2546,7 +2555,7 @@ body {
     if (par.toLowerCase().indexOf(root.toLowerCase()) === 0) { var rest = par.slice(root.length).replace(/^\\/, ""); return rest ? rest : "(this folder)"; }
     return par;
   }
-  function tileHtml(t, e, n, r, c) {
+  function tileHtml(t, e, n, r, c, pitch) {
     var k = kindOf(e);
     var pic = k === "image" && host && e.s < 25 * 1048576 && extOf(e.n) !== ".heic";
     // on Linux, photos, videos and PDFs show a small picture made in the background (and kept)
@@ -2554,7 +2563,7 @@ body {
     var th = thumb ? "<img class='pic' loading='lazy' alt='' src='" + esc(thumbUrl(e.p, 256)) + "' onerror='this.replaceWith(document.createTextNode(\"\"))'>" :
       pic ? "<img class='pic' loading='lazy' alt='' src='" + esc(fileUrl(e.p)) + "' onerror='this.replaceWith(document.createTextNode(\"\"))'>" : iconHtml(e, e.p, true);
     return "<div class='tile" + (t.sel.has(e.p) ? " sel" : "") + (n === t.focus ? " focus" : "") + (cutSet.has(e.p) ? " cut" : "") + "' data-i='" + n + "' draggable='true' title='" + esc(e.n) + "' " +
-      "style='position:absolute;left:" + (10 + c * TILE_W) + "px;top:" + (10 + r * TILE_H) + "px;width:" + (TILE_W - 6) + "px'>" +
+      "style='position:absolute;left:" + (10 + c * pitch + (pitch - TILE_W + 6) / 2).toFixed(2) + "px;top:" + (10 + r * TILE_H) + "px;width:" + (TILE_W - 6) + "px'>" +
       "<div class='th'>" + th + "</div><div class='tn'>" + esc(e.n) + "</div></div>";
   }
   /* A change of selection updates the rows already drawn (redrawing them would swallow a double-click) */
@@ -2573,7 +2582,7 @@ body {
   function ensureVisible(i, n) {
     var p = panes[i], t = tabOf(p), list = p.el.querySelector(".list");
     var H = list.clientHeight, y, h;
-    if (t.view === "grid") { var cols = Math.max(1, Math.floor((list.clientWidth - 20) / TILE_W)); y = 10 + Math.floor(n / cols) * TILE_H; h = TILE_H; }
+    if (t.view === "grid") { var cols = gridCols(list); y = 10 + Math.floor(n / cols) * TILE_H; h = TILE_H; }
     else { y = n * ROW + 4; h = ROW; }
     if (y < list.scrollTop) { list.scrollTop = y - 4; }
     else if (y + h > list.scrollTop + H) { list.scrollTop = y + h - H + 6; }
@@ -5224,7 +5233,7 @@ body {
     if (t.path === "" && t.mode === "folder") { return; }
     if (t.mode === "space") { if (k === "Backspace" || k === "Escape") { ev.preventDefault(); if (t.spaceHist && t.spaceHist.length) { var back = t.spaceHist.pop(); openSpace(t, back, true); } else { openPath(t, t.path, { keep: true, replace: true }); } } return; }
     var v = viewOf(t), cols = 1;
-    if (t.view === "grid") { cols = Math.max(1, Math.floor((p.el.querySelector(".list").clientWidth - 20) / TILE_W)); }
+    if (t.view === "grid") { cols = gridCols(p.el.querySelector(".list")); }
     var page = Math.max(1, Math.floor(p.el.querySelector(".list").clientHeight / (t.view === "grid" ? TILE_H : ROW)) * cols);
     if (k === "ArrowDown") { ev.preventDefault(); moveFocus(i, t.focus < 0 ? 0 : t.focus + cols, ev); }
     else if (k === "ArrowUp") { ev.preventDefault(); moveFocus(i, t.focus < 0 ? 0 : t.focus - cols, ev); }
