@@ -60,7 +60,7 @@ else:
 
 import webview  # noqa: E402
 
-VERSION = "1.4.2"
+VERSION = "1.4.3"
 DATA_DIR = desktop.DATA_DIR
 PAGE = os.path.join(HERE, "atlas.html")
 BG = "#1a1b1e"
@@ -89,6 +89,12 @@ window.__atlasRes = %(res)s;
   };
   window.__atlasRecv = function (list) {
     list.forEach(function (d) { listeners.forEach(function (fn) { try { fn({ data: d }); } catch (e) { setTimeout(function () { throw e; }); } }); });
+  };
+  // (Python writes a number that isn't one as NaN, which JSON.parse refuses and script reads)
+  window.__atlasRecvJ = function (s) {
+    var list;
+    try { list = JSON.parse(s); } catch (e) { list = (0, eval)("(" + s + ")"); }
+    window.__atlasRecv(list);
   };
   var saved = %(saved)s;
   window.__atlasStore = {
@@ -121,12 +127,13 @@ def write_file(path, text):
 
 
 class Job:
-    def __init__(self, jid, op, args):
+    def __init__(self, jid, op, args, finished=None):
         self.id, self.op, self.args = jid, op, args
         self.state = core.State()
         self.done = False
         self.result = None
         self.error = ""
+        self.finished = finished
         self.thread = threading.Thread(target=self._run, daemon=True)
 
     def _run(self):
@@ -137,6 +144,8 @@ class Job:
                 traceback.print_exc()
             self.error = getattr(e, "strerror", None) or str(e) or e.__class__.__name__
         self.done = True
+        if self.finished:
+            self.finished(self)
 
 
 class Copy:
@@ -199,6 +208,7 @@ class Host:
             start, self.start_select = os.path.dirname(os.path.abspath(start)), os.path.basename(start)
         self.start_path = start
         self.jobs = {}
+        self.jobs_lock = threading.Lock()   # a request's progress and its answer go out in order, from either thread
         self.copies = []
         self.copy_seq = 0
         self.copies_sent = ""
@@ -323,8 +333,10 @@ class Host:
                     items.append(self.outbox.get_nowait())
                 except queue.Empty:
                     break
+            # handed over as one string the page reads with JSON.parse: a big folder's listing is a megabyte,
+            # which WebKit reads three times as fast that way as it does the same written out as script
             try:
-                self.window.run_js("window.__atlasRecv && window.__atlasRecv([" + ",".join(items) + "]);")
+                self.window.run_js("window.__atlasRecvJ && window.__atlasRecvJ(" + json.dumps("[" + ",".join(items) + "]") + ");")
             except Exception:
                 pass
 
@@ -373,8 +385,9 @@ class Host:
     def receive(self, rid, op, m):
         # the file work: each request in a thread of its own (copies wait their turn in the copy queue, below)
         if core.handles(op) and op != "copy":
-            j = Job(rid, op, m)
-            self.jobs[rid] = j
+            j = Job(rid, op, m, self.job_finished)
+            with self.jobs_lock:
+                self.jobs[rid] = j
             j.thread.start()
             return
         if op == "cancel":
@@ -579,19 +592,11 @@ class Host:
 
     # ---- The timer: passes on background results and progress, copy progress and folder changes -------
     def tick(self):
-        for rid in list(self.jobs):
-            j = self.jobs[rid]
-            self.drain(j)
-            if j.done:
-                self.drain(j)
-                res = j.result
-                if isinstance(res, dict) and res.get("__error"):
-                    self.reply(rid, error=res["__error"])
-                elif j.error:
-                    self.reply(rid, error=j.error)
-                else:
-                    self.reply(rid, res)
-                del self.jobs[rid]
+        # progress of the requests still running (their answers go as soon as they're done: job_finished)
+        if self.jobs:
+            with self.jobs_lock:
+                for j in list(self.jobs.values()):
+                    self.drain(j)
         changed = False
         for c in self.copies:
             if c.status != "running" or not c.job.done:
@@ -628,6 +633,21 @@ class Host:
             self.changed = keep
         return True
 
+    def job_finished(self, j):
+        """A request is done: answered at once, from its own thread, rather than at the timer's next tick
+        (which added up to 50 ms to everything the page asked). Its last progress goes first."""
+        with self.jobs_lock:
+            if self.jobs.pop(j.id, None) is None:
+                return
+            self.drain(j)
+            res = j.result
+            if isinstance(res, dict) and res.get("__error"):
+                self.reply(j.id, error=res["__error"])
+            elif j.error:
+                self.reply(j.id, error=j.error)
+            else:
+                self.reply(j.id, res)
+
     def drain(self, j):
         q = j.state.events
         while not q.empty():
@@ -657,7 +677,7 @@ class Host:
                 return False
         for c in self.copies:
             c.state.cancel, c.state.paused = True, False
-        for j in self.jobs.values():
+        for j in list(self.jobs.values()):
             j.state.cancel = True
         geo = self.desktop.geometry()
         if geo:

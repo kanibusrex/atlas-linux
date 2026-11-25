@@ -262,6 +262,9 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .row .cm { font-variant-numeric: tabular-nums; }
 
 .list { flex: 1 1 0; overflow: auto; position: relative; outline: 0; min-height: 90px; overflow-anchor: none; }
+/* the rows are laid out on their own: a change elsewhere in the pane (its title, the path) no longer lays them all
+   out again. It sits at the list's top left, as wide, so the rows land exactly where they did. */
+.spacer { contain: layout style; }
 /* the list draws only the rows in view and swaps them as it scrolls: WebKit's scroll anchoring would chase the
    swapped rows and move the scroll position (the bar jumped about, and stopped matching where you were) */
 .mcol, .home, .space, .pv-body, .side-scroll { overflow-anchor: none; }
@@ -1992,29 +1995,30 @@ body {
   }
 
   /* ---- What a tab shows: its entries filtered and sorted --------------------------------------------- */
-  var DAY = 864e5;
-  function passes(t, e) {
-    if (PICK && !pickPasses(e)) { return false; }
-    if (!S.hidden && isHidden(e) && t.mode !== "search") { return false; }
+  var DAY = 864e5, viewColl = null;
+  // what a tab lets through, made once for all its entries: the filter's words (or wildcard pattern) and
+  // types are worked out here, not again for each of what may be ten thousand entries
+  function passer(t) {
+    var hide = !S.hidden && t.mode !== "search", f = t.f, words = null, re = null, xs = null, now = Date.now();
     if (t.filter && (t.mode === "folder" || isRecent(t))) {
-      var words = t.filter.toLowerCase().split(/\s+/).filter(Boolean), n = e.n.toLowerCase();
-      if (/[*?]/.test(t.filter)) {
-        var re = new RegExp("^" + t.filter.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i");
-        if (!re.test(e.n)) { return false; }
-      } else if (!words.every(function (w) { return n.indexOf(w) !== -1; })) { return false; }
+      if (/[*?]/.test(t.filter)) { re = new RegExp("^" + t.filter.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".") + "$", "i"); }
+      else { words = t.filter.toLowerCase().split(/\s+/).filter(Boolean); }
     }
-    var f = t.f;
-    if (f.type) {
-      var k = kindOf(e);
-      if (f.type === "folder" ? k !== "folder" : (f.type === "docs" ? ["word", "sheet", "slides", "pdf", "text"].indexOf(k) === -1 : k !== f.type)) { return false; }
-    }
-    if (f.ext) {
-      var xs = f.ext.toLowerCase().split(/[,;\s]+/).filter(Boolean).map(function (x) { return x.charAt(0) === "." ? x : "." + x; });
-      if (e.d || xs.indexOf(extOf(e.n)) === -1) { return false; }
-    }
-    if (f.when) { if (!e.m || Date.now() - e.m > (+f.when) * DAY) { return false; } }
-    if (f.size) { if (e.d || e.s < +f.size) { return false; } }
-    return true;
+    if (f.ext) { xs = f.ext.toLowerCase().split(/[,;\s]+/).filter(Boolean).map(function (x) { return x.charAt(0) === "." ? x : "." + x; }); }
+    return function (e) {
+      if (PICK && !pickPasses(e)) { return false; }
+      if (hide && isHidden(e)) { return false; }
+      if (re) { if (!re.test(e.n)) { return false; } }
+      else if (words) { var n = e.n.toLowerCase(); for (var w = 0; w < words.length; w++) { if (n.indexOf(words[w]) === -1) { return false; } } }
+      if (f.type) {
+        var k = kindOf(e);
+        if (f.type === "folder" ? k !== "folder" : (f.type === "docs" ? ["word", "sheet", "slides", "pdf", "text"].indexOf(k) === -1 : k !== f.type)) { return false; }
+      }
+      if (xs) { if (e.d || xs.indexOf(extOf(e.n)) === -1) { return false; } }
+      if (f.when) { if (!e.m || now - e.m > (+f.when) * DAY) { return false; } }
+      if (f.size) { if (e.d || e.s < +f.size) { return false; } }
+      return true;
+    };
   }
   // hidden or system (h, y in its flags); a share's flags are the word "share", which is neither
   function isHidden(e) { return !!e.a && e.a !== "share" && /[hy]/.test(e.a); }
@@ -2022,15 +2026,15 @@ body {
   function viewOf(t) {
     if (t.viewCache) { return t.viewCache; }
     var src = t.mode === "search" ? (t.search ? t.search.items : []) : t.entries;
-    var out = [];
+    var out = [], passes = passer(t);
     for (var i = 0; i < src.length; i++) {
       var e = src[i];
       if (!e.p) { e.p = join(t.path, e.n); }
-      if (passes(t, e)) { out.push(e); }
+      if (passes(e)) { out.push(e); }
     }
     var key = t.sort.key, dir = t.sort.dir;
     if (isRecent(t) && !t.search.sorted) { key = "used"; dir = -1; }
-    var coll = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    var coll = viewColl || (viewColl = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" }));
     out.sort(function (a, b) {
       if (a.d !== b.d) { return a.d ? -1 : 1; }
       var r = 0;
@@ -2215,21 +2219,48 @@ body {
     if (sig === box._sig) { return; }
     box._sig = sig;
     var fsvg = "<span class='fi'>" + folderSvg() + "</span>";
-    box.innerHTML = cols.map(function (c) {
+    var later = [];
+    box.innerHTML = cols.map(function (c, k) {
       var body;
       if (!c.dirs) { body = "<div class='mnote'><span class='spin' style='display:inline-block;width:12px;height:12px'></span></div>"; }
       else {
         var list = c.dirs.filter(function (e) { return S.hidden || !isHidden(e); }).map(function (e) { return e.n; }).sort(millColl.compare);
         // the folder on the way to here goes to the top of its column
         if (c.next) { var nb = baseName(c.next); list = [nb].concat(list.filter(function (x) { return x.toLowerCase() !== nb.toLowerCase(); })); }
-        body = list.length ? list.map(function (nm) {
+        var item = function (nm) {
           var full = join(c.path, nm), on = c.next && samePath(full, c.next), here = on && samePath(full, t.path);
           return "<button class='mi" + (on ? " on" : "") + (here ? " here" : "") + "' data-go='" + esc(full) + "' title='" + esc(full) + "' draggable='false'>" + fsvg + "<span>" + esc(nm) + "</span></button>";
-        }).join("") : "<div class='mnote'>" + esc(c.err ? "Can't open: " + c.err : c.last ? "No folders inside" : "No folders") + "</div>";
+        };
+        // a folder of hundreds of folders: the first ones now, the rest as the column is scrolled to them
+        // (their room kept by .mrest, so the scroll bar is as it will be); making them all took a quarter second
+        if (list.length > MILL_FIRST) { later[k] = { left: list.slice(MILL_FIRST), item: item }; list = list.slice(0, MILL_FIRST); }
+        body = list.length ? list.map(item).join("") + (later[k] ? "<div class='mrest'></div>" : "") :
+          "<div class='mnote'>" + esc(c.err ? "Can't open: " + c.err : c.last ? "No folders inside" : "No folders") + "</div>";
       }
       return "<div class='mcol' data-col='" + esc(c.path) + "' title=''>" + body + "</div>";
     }).join("");
-    box.querySelectorAll(".mcol").forEach(function (col) { col.scrollTop = 0; });
+    box.querySelectorAll(".mcol").forEach(function (col, k) {
+      col.scrollTop = 0;
+      col._more = null;
+      if (later[k]) { millLater(col, later[k].left, later[k].item); }
+    });
+  }
+  var MILL_FIRST = 40;
+  function millLater(col, left, item) {
+    var rest = col.querySelector(".mrest"), b = col.querySelectorAll(".mi:not(.on)");
+    // one folder's height, as drawn (rows, not a guess, so the kept room is exactly theirs)
+    var pitch = b.length > 1 ? b[1].getBoundingClientRect().top - b[0].getBoundingClientRect().top : 0;
+    if (!rest || !(pitch > 0)) { rest && rest.insertAdjacentHTML("beforebegin", left.map(item).join("")); rest && rest.remove(); return; }
+    rest.style.height = left.length * pitch + "px";
+    col._more = function (all) {
+      if (!left.length || !rest.isConnected) { return; }
+      var near = rest.getBoundingClientRect().top - col.getBoundingClientRect().top < col.clientHeight * 2;
+      if (!all && !near) { return; }
+      var take = left.splice(0, all ? left.length : 80);
+      rest.insertAdjacentHTML("beforebegin", take.map(item).join(""));
+      if (left.length) { rest.style.height = left.length * pitch + "px"; } else { rest.remove(); col._more = null; }
+    };
+    col._more(false);
   }
   function toggleMill() {
     S.mill = !S.mill;
@@ -2419,6 +2450,7 @@ body {
       spacer.innerHTML = "<div class='grid' style='grid-template-columns:repeat(" + cols + ", " + (TILE_W - 6) + "px);position:relative'>" + html + "</div>";
       var g = spacer.firstChild;
       g.style.position = "absolute"; g.style.display = "block";
+      spacer._drawn = { t: t, v: v, grid: true, cols: cols, a: r0 * cols, b: Math.min(v.length, r1 * cols) };
       return;
     }
     var RH = ROW;
@@ -2426,6 +2458,45 @@ body {
     var a = Math.max(0, Math.floor(top / RH) - 8), b = Math.min(v.length, Math.ceil((top + H) / RH) + 8);
     for (var n = a; n < b; n++) { html += rowHtml(t, v[n], n, n * RH + 4); }
     spacer.innerHTML = html;
+    spacer._drawn = { t: t, v: v, grid: false, a: a, b: b };
+  }
+  /* Scrolled: the rows (or tiles) drawn already stay where they are, and only the ones coming into sight are
+     made, as the ones gone well out of it are let go. Making a row is what costs (its style and layout, over
+     a millisecond each on a slow PC), so a scroll no longer redraws the forty or so in sight every frame. */
+  function scrollList(i) {
+    var p = panes[i], t = tabOf(p), list = p.el.querySelector(".list"), spacer = list.querySelector(".spacer");
+    var d = spacer && spacer._drawn, v = viewOf(t), grid = t.view === "grid";
+    var box = d && (d.grid ? spacer.firstElementChild : spacer);
+    // anything else changed since it was drawn (another folder, sort, filter, view, width): drawn afresh
+    if (!d || d.t !== t || d.v !== v || d.grid !== grid || (t.scrollTo != null && t.scrollTo >= 0) || !box || box.childElementCount !== d.b - d.a) { paintList(i); return; }
+    var H = list.clientHeight || 600, top = list.scrollTop, per = 1, lo, hi, a, b;
+    if (grid) {
+      per = Math.max(1, Math.floor((list.clientWidth - 20) / TILE_W));
+      if (per !== d.cols) { paintList(i); return; }
+      var rows = Math.ceil(v.length / per);
+      lo = Math.floor(top / TILE_H) * per; hi = Math.min(v.length, Math.ceil((top + H) / TILE_H) * per);
+      a = Math.max(0, Math.floor(top / TILE_H) - 2) * per; b = Math.min(v.length, Math.min(rows, Math.ceil((top + H) / TILE_H) + 2) * per);
+    } else {
+      lo = Math.floor(top / ROW); hi = Math.min(v.length, Math.ceil((top + H) / ROW));
+      a = Math.max(0, lo - 8); b = Math.min(v.length, hi + 8);
+    }
+    // what is in sight, and a little more each way, is drawn already
+    if (d.a <= Math.max(0, lo - 2 * per) && d.b >= Math.min(v.length, hi + 2 * per)) { return; }
+    var item = function (n) { return grid ? tileHtml(t, v[n], n, Math.floor(n / per), n % per) : rowHtml(t, v[n], n, n * ROW + 4); };
+    var html = "", n;
+    if (b <= d.a || a >= d.b) {
+      for (n = a; n < b; n++) { html += item(n); }
+      box.innerHTML = html;
+    } else {
+      for (n = d.a; n < a; n++) { box.firstElementChild.remove(); }
+      for (n = b; n < d.b; n++) { box.lastElementChild.remove(); }
+      for (n = a; n < Math.min(d.a, b); n++) { html += item(n); }
+      if (html) { box.insertAdjacentHTML("afterbegin", html); }
+      html = "";
+      for (n = Math.max(d.b, a); n < b; n++) { html += item(n); }
+      if (html) { box.insertAdjacentHTML("beforeend", html); }
+    }
+    d.a = a; d.b = b;
   }
   function rowHtml(t, e, n, y) {
     var bin = t.isTrash && t.mode === "folder";
@@ -4772,6 +4843,9 @@ body {
       if (ev.ctrlKey) { addTab(i, path); return; }
       openPath(t, path); focusList(i);
     });
+    // a long column's other folders are made as it's scrolled to them, or all at once when tabbed into
+    mill.addEventListener("scroll", function (ev) { var col = ev.target; if (col && col._more) { col._more(false); } }, true);
+    mill.addEventListener("focusin", function (ev) { var col = ev.target.closest && ev.target.closest(".mcol"); if (col && col._more) { col._more(true); } });
     mill.addEventListener("auxclick", function (ev) { var g = ev.target.closest("[data-go]"); if (g && ev.button === 1) { addTab(i, g.getAttribute("data-go")); } });
     mill.addEventListener("contextmenu", function (ev) {
       var g = ev.target.closest("[data-go]"); if (!g) { return; }
@@ -4834,7 +4908,7 @@ body {
     var raf = 0;
     list.addEventListener("scroll", function () {
       var t = tabOf(p); t.scroll = list.scrollTop;
-      if (!raf) { raf = requestAnimationFrame(function () { raf = 0; if (tabOf(p).view === "grid" || viewOf(tabOf(p)).length > 40) { var t2 = tabOf(p); if (t2.path !== "" || t2.mode !== "folder") { if (t2.mode !== "space") { paintList(i); } } } }); }
+      if (!raf) { raf = requestAnimationFrame(function () { raf = 0; if (tabOf(p).view === "grid" || viewOf(tabOf(p)).length > 40) { var t2 = tabOf(p); if (t2.path !== "" || t2.mode !== "folder") { if (t2.mode !== "space") { scrollList(i); } } } }); }
     });
     list.addEventListener("mousedown", function (ev) {
       if (ev.button !== 0 && ev.button !== 2) { return; }
