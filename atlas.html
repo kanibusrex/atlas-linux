@@ -1180,6 +1180,7 @@ body {
 .btn.sm { height: 26px; padding: 0 11px; background: color-mix(in srgb, var(--text) 5%, transparent); border: 1px solid var(--c-hair); box-shadow: none; }
 .btn.sm:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, var(--c-hair)); }
 .btn.pri, .btn.sm.pri { box-shadow: 0 0 18px -4px var(--c-glow), inset 0 1px 0 rgba(255,255,255,.22); border-color: transparent; }
+.btn.sm.pri { background-image: var(--grad-accent); }   /* .btn.sm above took the small primary buttons' fill away */
 .pv-facts { padding: 6px 16px 16px; gap: 0 12px; }
 .pv-facts dt, .pv-facts dd { padding: 7px 0; border-bottom: 1px solid var(--c-hair-2); }
 .pv-facts dt { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; padding-top: 9px; }
