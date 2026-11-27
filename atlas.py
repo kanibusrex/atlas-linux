@@ -284,6 +284,20 @@ class Host:
             subprocess.Popen(cmd, start_new_session=True, close_fds=True, stdin=subprocess.DEVNULL)
         return True
 
+    def restart(self):
+        """Closes this window and starts Atlas again once this process has gone (so the new one is the one
+        running, not handed over to this one), with the same tabs."""
+        if os.environ.get("APPIMAGE") and os.path.isfile(os.environ["APPIMAGE"]):
+            cmd = [os.environ["APPIMAGE"]]
+        elif getattr(sys, "frozen", False):
+            cmd = [sys.executable]
+        else:
+            cmd = [sys.executable, os.path.abspath(__file__)]
+        if sys.platform != "win32":
+            wait = 'while kill -0 %d 2>/dev/null; do sleep 0.2; done; exec "$@"' % os.getpid()
+            subprocess.Popen(["/bin/sh", "-c", wait, "sh"] + cmd, start_new_session=True, close_fds=True, stdin=subprocess.DEVNULL)
+        self.desktop.call_main(self.window.destroy)
+
     def run(self):
         q = "?path=" + urllib.parse.quote(os.path.abspath(self.start_path), safe="") if self.start_path else ""
         if self.start_path and self.start_select:
@@ -301,8 +315,12 @@ class Host:
         # A tiling window manager (Hyprland) gives a window its slot whatever minimum it asks for, and shrinks
         # what the window draws to fit, squashing the text: so on Linux, a minimum that any slot will meet.
         small = (320, 240) if desktop.SYSTEM == "linux" else (760, 480)
+        # a see-through theme (Smoke): the window is made without a background, so the desktop shows through
+        # the page's tinted glass. A window is see-through or not from the start, so choosing it takes a restart.
+        self.glass = desktop.SYSTEM == "linux" and bool(self.prefs.get("Glass"))
         self.window = webview.create_window(title, self.base + "atlas.html" + q, js_api=Api(self), width=w, height=h,
-                                            min_size=small, maximized=maxed, background_color=BG, text_select=True)
+                                            min_size=small, maximized=maxed, background_color=BG, text_select=True,
+                                            transparent=self.glass)
         self.window.events.before_show += lambda: self.desktop.attach(self.window)
         self.window.events.closing += self.on_closing
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
@@ -447,6 +465,23 @@ class Host:
             self.desktop.set_zoom(z)
             self.prefs["Zoom"] = z
             return self.reply(rid, z)
+        if op == "glass":
+            # the theme wants the desktop to show through: kept for the next start, and said whether it does now
+            on = desktop.SYSTEM == "linux" and bool(m.get("on"))
+            if bool(self.prefs.get("Glass")) != on:
+                self.prefs["Glass"] = on
+                if not self.pick and not self.extra:
+                    try:
+                        write_file(self.prefs_path, json.dumps(self.prefs))
+                    except OSError:
+                        pass
+            return self.reply(rid, {"live": self.glass, "can": desktop.SYSTEM == "linux"})
+        if op == "restart":
+            if any(c.status in ("running", "waiting") for c in self.copies):
+                return self.reply(rid, error="A copy is still going. Atlas can restart once it's done.")
+            self.reply(rid, True)
+            self.restart()
+            return
         if op == "theme":
             self.prefs["Dark"] = bool(m.get("dark"))
             self.desktop.set_dark(self.prefs["Dark"])

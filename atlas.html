@@ -285,7 +285,6 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .row .hitx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .hitx mark, .pv-facts mark { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text); border-radius: 3px; padding: 0 1px; }
 .row .ell { font-size: 12px; color: var(--muted); }
-.row input.ren { width: 100%; height: 24px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--accent); background: var(--bg); outline: 0; }
 .fi { width: 18px; height: 18px; flex: none; display: grid; place-items: center; }
 .fi img { width: 18px; height: 18px; object-fit: contain; }
 .fi svg { width: 18px; height: 18px; }
@@ -300,6 +299,8 @@ svg.ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: r
 .tile .th { width: 100%; height: 78px; display: grid; place-items: center; border-radius: 7px; overflow: hidden; }
 .tile .th img.pic { max-width: 100%; max-height: 78px; object-fit: contain; border-radius: 5px; background: var(--surface-3); }
 .tile .th .fi, .tile .th .fi img, .tile .th .fi svg { width: 44px; height: 44px; }
+.tile .th > * { grid-area: 1 / 1; }
+.tile .th.ok > .fi { visibility: hidden; }
 .tile .tn { font-size: 12px; text-align: center; line-height: 1.3; max-width: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
 
 .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; padding: 30px; }
@@ -503,6 +504,9 @@ body.pvright .preview:not(.dock) { width: auto; position: relative; }
 .fld input, .fld select { height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); outline: 0; }
 .fld input:focus, .fld select:focus { border-color: var(--accent); }
 .fld .hint { font-size: 12px; color: var(--muted); }
+.fld textarea.ren-in { min-height: 34px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font: inherit; line-height: 1.4; outline: 0; resize: none; overflow: hidden; word-break: break-all; white-space: pre-wrap; }
+.fld textarea.ren-in:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.fld .hint.bad { color: var(--danger); }
 .frow { display: flex; gap: 10px; }
 .frow .fld { flex: 1; }
 .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--surface-2); border-radius: 9px; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); margin-bottom: 12px; flex-wrap: wrap; }
@@ -1082,6 +1086,14 @@ body {
     var(--c-deep);
 }
 #app { background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--text) 7%, transparent) 1px, transparent 1.5px); background-size: 22px 22px; }
+/* Smoke: no backdrop of its own; the desktop behind the window, under a light smoky tint (darker at the
+   bottom), with the cards as darker smoked glass over it. Text gets a faint shadow, so it reads over any
+   wallpaper. Until Atlas restarts see-through (glass-wait), a plain deep backdrop stands in. */
+html[data-glass] { background: transparent; }
+[data-glass] body { background: linear-gradient(180deg, rgba(5,6,8,.46) 0%, rgba(5,6,8,.58) 100%); text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+[data-glass].glass-wait body { background: radial-gradient(70% 55% at 55% -12%, rgba(166,193,247,.1), transparent 70%), #0b0c0f; }
+[data-glass] #app { background-image: none; }
+[data-glass] .menu, [data-glass] .dlg, [data-glass] .toast, [data-glass] input, [data-glass] textarea, [data-glass] .btn.pri { text-shadow: none; }
 
 /* the side bar, the panes, the preview and the copies: cards floating on it */
 .side { margin: var(--c-gap) 0 var(--c-gap) var(--c-gap); border-radius: var(--c-r); border: 1px solid var(--c-hair); background: var(--c-card); box-shadow: var(--c-hi), var(--c-shadow); }
@@ -1673,7 +1685,7 @@ body {
       D.addEventListener("keydown", key, true);
       openDialog = s;
       if (o.mount) { o.mount(s); }
-      var f = s.querySelector("input, select") || s.querySelector(".btn.pri");
+      var f = s.querySelector("input, select, textarea") || s.querySelector(".btn.pri");
       if (f) { setTimeout(function () { f.focus(); if (f.select && o.selectAll !== false) { f.select(); } }, 20); }
     });
   }
@@ -1906,8 +1918,11 @@ body {
       return Promise.resolve();
     }
     t.loading = true;
+    // the folder already shown, read again (a refresh): it stays as it is until the new listing is in,
+    // without "Opening..." or a spinner flashing up meanwhile
+    t.quietLoad = !!o.keep && same && t.entries.length > 0;
     var ticket = (t.ticket = (t.ticket || 0) + 1);
-    var slow = setTimeout(function () { if (t.ticket === ticket && t.loading) { paintTab(t); } }, 180);
+    var slow = t.quietLoad ? 0 : setTimeout(function () { if (t.ticket === ticket && t.loading) { paintTab(t); } }, 180);
     if (!o.keep) { paintTab(t); }
     return api("list", { path: path }).then(function (r) {
       clearTimeout(slow);
@@ -2088,6 +2103,36 @@ body {
     var b = tabs.querySelectorAll("[data-sc]");
     if (b.length) { b[0].disabled = at <= 1; b[1].disabled = at >= max - 1; }
   }
+  /* Drawing only what changed. put() leaves an element alone when what it would get is what it has already
+     (and nothing else changed it since); patchKids() keeps the rows, tiles and cards that are the same and
+     makes only the ones that differ. A refresh (a file growing, a folder changing, a copy's progress) used
+     to draw everything in sight again, which showed as a blink, and could swallow a click. */
+  function put(el, html) {
+    if (!el || (el._h === html && el._s === el.innerHTML)) { return false; }
+    el.innerHTML = html; el._h = html; el._s = el.innerHTML;
+    return true;
+  }
+  function makeKids(htmls) {
+    var box = D.createElement("div");
+    box.innerHTML = htmls.join("");
+    var out = Array.prototype.slice.call(box.children);
+    out.forEach(function (el, k) { el._h = htmls[k]; });
+    return out;
+  }
+  // each html is one element; the box ends up with exactly those, in that order
+  function patchKids(box, htmls) {
+    var pool = {}, kids = box.children, k, el;
+    for (k = 0; k < kids.length; k++) { el = kids[k]; if (el._h) { (pool[el._h] || (pool[el._h] = [])).push(el); } }
+    var want = [], make = [], at = [];
+    htmls.forEach(function (h, n) { var same = pool[h] && pool[h].shift(); if (same) { want[n] = same; } else { make.push(h); at.push(n); } });
+    makeKids(make).forEach(function (x, j) { want[at[j]] = x; });
+    // the ones not wanted go first, so those kept, already in order, aren't moved one by one past them
+    Object.keys(pool).forEach(function (h) { pool[h].forEach(function (x) { x.remove(); }); });
+    for (k = kids.length - 1; k >= 0; k--) { if (!kids[k]._h) { kids[k].remove(); } }
+    var cur = box.firstElementChild;
+    want.forEach(function (x) { if (x === cur) { cur = cur.nextElementSibling; } else { box.insertBefore(x, cur); } });
+    while (cur) { var nx = cur.nextElementSibling; cur.remove(); cur = nx; }
+  }
   function paintPane(i) {
     var p = panes[i];
     if (!p || !p.el) { return; }
@@ -2101,12 +2146,12 @@ body {
       strip = tabs.querySelector(".tstrip");
     }
     var keep = strip.scrollLeft, fresh = tabs._shown != null && p.active !== tabs._shown;   // (fresh: just switched to)
-    strip.innerHTML = p.tabs.map(function (tb, k) {
+    put(strip, p.tabs.map(function (tb, k) {
       var label = isRecent(tb) ? "Recent" : tb.mode === "search" ? "Search: " + tb.search.query : tb.mode === "space" ? "Space: " + baseName(tb.space.path) : baseName(tb.path);
       var ic = isRecent(tb) ? svg("clock") : tb.mode === "search" ? svg("search") : tb.mode === "space" ? svg("pie") : tb.path === "" ? svg("pc") : /^\\\\[^\\]+$/.test(tb.path) ? svg("server") : "<span class='fi' style='width:16px;height:16px'>" + folderSvg() + "</span>";
       return "<div class='tab" + (k === p.active ? " on" + (fresh ? " fresh" : "") : "") + "' role='tab' draggable='" + (PICK ? "false" : "true") + "' data-t='" + k + "' title='" + esc(isRecent(tb) ? "Recent" : tb.path || "This PC") + "' aria-selected='" + (k === p.active) + "'>" + ic + "<span class='tl'>" + esc(label) + "</span>" +
         "<button class='tx' data-x='" + k + "' title='Close tab (Ctrl+W)'>" + svg("x") + "</button></div>";
-    }).join("");
+    }).join(""));
     strip.scrollLeft = keep;
     tabsFit(tabs, p.active !== tabs._shown || p.tabs.length !== tabs._count);
     tabs._shown = p.active; tabs._count = p.tabs.length;
@@ -2116,11 +2161,11 @@ body {
     el.querySelector("[data-a=up]").disabled = t.mode === "folder" && (parentOf(t.path) === null || !!t.isTrash);
     var fav = el.querySelector("[data-a=fav]");
     var isFav = S.favs.some(function (f) { return samePath(f, t.path); });
-    fav.innerHTML = svg(isFav ? "starf" : "star");
+    put(fav, svg(isFav ? "starf" : "star"));
     fav.classList.toggle("on", isFav);
     fav.disabled = !t.path;
     fav.title = isFav ? "Remove from favourites (Ctrl+D)" : "Add to favourites (Ctrl+D)";
-    el.querySelector("[data-a=view]").innerHTML = svg(t.view === "grid" ? "list" : "grid");
+    put(el.querySelector("[data-a=view]"), svg(t.view === "grid" ? "list" : "grid"));
     var et = el.querySelector("[data-a=emptytrash]"), inBin = !!t.isTrash && t.mode === "folder";
     et.hidden = !inBin; et.disabled = inBin && !t.entries.length;
     el.querySelector("[data-a=new]").disabled = inBin;
@@ -2146,12 +2191,12 @@ body {
     if (t.mode === "space") { head.hidden = true; paintSpace(i); paintStatus(i); return; }
     if (t.view === "grid") { head.hidden = true; }
     var arrow = function (k) { return t.sort.key === k ? (t.sort.dir > 0 ? " \u25B4" : " \u25BE") : ""; };
-    head.innerHTML = "<button data-s='name' class='" + (t.sort.key === "name" ? "on" : "") + "'>Name" + arrow("name") + "</button>" +
+    put(head, "<button data-s='name' class='" + (t.sort.key === "name" ? "on" : "") + "'>Name" + arrow("name") + "</button>" +
       (wide ? "<button data-s='folder' class='" + (t.sort.key === "folder" ? "on" : "") + "'>" + (t.mode === "search" ? (t.search && t.search.opts.content ? "Found" : "Folder") : "Was in") + arrow("folder") + "</button>" : "") +
       "<button data-s='ext' class='cx " + (t.sort.key === "ext" || t.sort.key === "type" ? "on" : "") + "' title='Sort by extension'>Ext" + arrow("ext") + "</button>" +
       "<button data-s='mod' class='ca " + (t.sort.key === "mod" ? "on" : "") + "' title='How long ago it changed'>Age</button>" +
       "<button data-s='mod' class='cm " + (t.sort.key === "mod" ? "on" : "") + "'>" + (t.isTrash && t.mode === "folder" ? "Deleted" : "Modified") + arrow("mod") + "</button>" +
-      "<button data-s='size' class='r " + (t.sort.key === "size" ? "on" : "") + "'>Size" + arrow("size") + "</button>";
+      "<button data-s='size' class='r " + (t.sort.key === "size" ? "on" : "") + "'>Size" + arrow("size") + "</button>");
     paintList(i, true);
     paintStatus(i);
   }
@@ -2167,7 +2212,7 @@ body {
     else {
       label = inZip(t) ? baseName(t.path) : baseName(t.path);
       ic = /^\\\\[^\\]+$/.test(t.path) ? svg("server") : /^[A-Za-z]:\\?$/.test(t.path) ? svg("drive") : "<span class='fi'>" + folderSvg() + "</span>";
-      if (t.loading) { note = "Opening\u2026"; }
+      if (t.loading && !t.quietLoad) { note = "Opening\u2026"; }
       else if (!t.error) {
         var nd = 0, nf = 0;
         t.entries.forEach(function (e) { if (S.hidden || !isHidden(e)) { if (e.d) { nd++; } else { nf++; } } });
@@ -2175,9 +2220,9 @@ body {
         if (t.isTrash) { label = "Trash"; ic = svg("trash"); note = t.entries.length ? plural(t.entries.length, "item") + " \u00B7 restore them, or empty the Trash to free the space" : "The Trash is empty"; }
       }
     }
-    h.innerHTML = ic + "<span class='tn'>" + esc(label) + "</span>";
+    put(h, ic + "<span class='tn'>" + esc(label) + "</span>");
     h.title = t.mode === "folder" ? (t.path || "This PC") : "";
-    sub.textContent = note;
+    if (sub.textContent !== note) { sub.textContent = note; }
   }
 
   /* ---- Folder columns: one column per folder on the way to this one --------------------------------- */
@@ -2311,6 +2356,9 @@ body {
     }).join("");
     if (t.mode === "search" && !isRecent(t)) { html += "<span class='csep'>" + svg("fwd") + "</span><span class='crumb last'>Search results</span>"; }
     if (t.mode === "space") { html += "<span class='csep'>" + svg("fwd") + "</span><span class='crumb last'>Space</span>"; }
+    // the same path at the same width: what's there is right (shortening below changes it, so it isn't compared)
+    var sig = html + "|" + box.clientWidth;
+    if (box._sig === sig && box.firstChild === box._first && box._first) { box._segs = segs; return; }
     box.innerHTML = html + "<span class='fill'></span>";
     box.classList.remove("tight");
     box._segs = segs;
@@ -2332,6 +2380,7 @@ body {
     }
     // only the folder you are in is left and it still does not fit: it is shortened, with its full path on hover
     if (box.scrollWidth > box.clientWidth + 1) { box.classList.add("tight"); }
+    box._sig = sig; box._first = box.firstChild;
   }
   function editCrumbs(i, text) {
     var p = panes[i], t = tabOf(p), box = p.el.querySelector(".crumbs");
@@ -2364,12 +2413,12 @@ body {
     box.hidden = !(t.chips || any) || (t.path === "" && t.mode === "folder") || t.mode === "space";
     if (box.hidden) { return; }
     var chip = function (k, v, label) { return "<button class='chip" + (t.f[k] === v ? " on" : "") + "' data-f='" + k + "' data-v='" + v + "'>" + esc(label) + "</button>"; };
-    box.innerHTML = "<span class='lab'>Type</span>" + chip("type", "", "Any") + chip("type", "folder", "Folders") + chip("type", "docs", "Documents") + chip("type", "image", "Pictures") +
+    put(box, "<span class='lab'>Type</span>" + chip("type", "", "Any") + chip("type", "folder", "Folders") + chip("type", "docs", "Documents") + chip("type", "image", "Pictures") +
       chip("type", "pdf", "PDFs") + chip("type", "sheet", "Spreadsheets") + chip("type", "archive", "Archives") + chip("type", "video", "Videos") +
       "<span class='sep'></span><span class='lab'>Modified</span>" + chip("when", "", "Any time") + chip("when", "1", "Today") + chip("when", "7", "This week") + chip("when", "30", "This month") + chip("when", "365", "This year") +
       "<span class='sep'></span><span class='lab'>Size</span>" + chip("size", "", "Any") + chip("size", String(1048576), "1 MB+") + chip("size", String(104857600), "100 MB+") + chip("size", String(1073741824), "1 GB+") +
       "<span class='sep'></span><input data-fx placeholder='Types: pdf, docx' value='" + esc(t.f.ext) + "' style='width:130px' spellcheck='false'>" +
-      (any ? "<button class='chip' data-clear>Clear</button>" : "");
+      (any ? "<button class='chip' data-clear>Clear</button>" : ""));
   }
   function setFilter(t, k, v) {
     t.f[k] = v;
@@ -2385,25 +2434,25 @@ body {
     box.classList.remove("zip");
     if (t.mode === "folder" && inZip(t)) {
       box.hidden = false; box.classList.add("zip");
-      box.innerHTML = svg("copies") + "<span>Inside the " + (LINUX ? "archive" : "zip file") + " <b>" + esc(baseName(t.zip.zip)) + "</b>. You can look and open; to change files, extract them first.</span><span class='grow'></span>" +
-        "<button class='btn sm' data-zx='sel'>Extract selected</button><button class='btn sm' data-zx='all'>Extract all</button>";
+      put(box, svg("copies") + "<span>Inside the " + (LINUX ? "archive" : "zip file") + " <b>" + esc(baseName(t.zip.zip)) + "</b>. You can look and open; to change files, extract them first.</span><span class='grow'></span>" +
+        "<button class='btn sm' data-zx='sel'>Extract selected</button><button class='btn sm' data-zx='all'>Extract all</button>");
       return;
     }
     if (isRecent(t)) {
       box.hidden = false;
-      box.innerHTML = (t.search.done ? svg("clock") : "<span class='spin'></span>") + "<span>" + (t.search.done ? "<b>" + plural(t.search.items.length, "file") + "</b> opened lately, the latest first" : "Gathering the files you opened lately\u2026") +
-        "</span><span class='grow'></span><button class='btn sm' data-recentagain>Refresh</button>";
+      put(box, (t.search.done ? svg("clock") : "<span class='spin'></span>") + "<span>" + (t.search.done ? "<b>" + plural(t.search.items.length, "file") + "</b> opened lately, the latest first" : "Gathering the files you opened lately\u2026") +
+        "</span><span class='grow'></span><button class='btn sm' data-recentagain>Refresh</button>");
       return;
     }
     if (t.mode === "search" && t.search) {
       var s = t.search;
       box.hidden = false;
-      box.innerHTML = (s.done ? svg("search") : "<span class='spin'></span>") +
+      put(box, (s.done ? svg("search") : "<span class='spin'></span>") +
         "<span>" + (s.done ? "" : "Searching for ") + (s.done ? "<b>" + plural(s.items.length, "result") + "</b> for " : "") + "<b>" + esc(s.query || "everything") + "</b>" + (s.opts.content ? " inside files" : "") + " in <b>" + esc(baseName(s.root)) + "</b> and its folders" +
         (s.done ? "" : " \u00B7 " + plural(s.items.length, "found") .replace(" founds", " found") + ", " + s.scanned.toLocaleString() + " looked at") +
         (s.capped ? " \u00B7 stopped at " + s.items.length.toLocaleString() + "; narrow the search to see more" : "") + (s.cancelled ? " \u00B7 stopped" : "") + "</span><span class='grow'></span>" +
         "<span class='seg sm' title='Search the names of files and folders, or the words inside files'><button data-inside='0' class='" + (s.opts.content ? "" : "on") + "'>Names</button><button data-inside='1' class='" + (s.opts.content ? "on" : "") + "'>Inside files</button></span>" +
-        (s.done ? "" : "<button class='btn sm' data-stop>Stop</button>") + "<button class='btn sm' data-exit>Back to the folder</button>";
+        (s.done ? "" : "<button class='btn sm' data-stop>Stop</button>") + "<button class='btn sm' data-exit>Back to the folder</button>");
     }
   }
 
@@ -2418,30 +2467,38 @@ body {
     var spacer = list.querySelector(".spacer");
     if (!spacer) { list.innerHTML = "<div class='spacer'></div>"; spacer = list.querySelector(".spacer"); }
     var old = list.querySelector(".home, .space, .empty");
-    if (old) { old.remove(); }
+    // a note in place of the list ("Opening...", "This folder is empty"): left as it is when it says the same
+    var notice = function (html) {
+      spacer.style.height = "0px"; if (spacer.firstChild) { spacer.innerHTML = ""; }
+      if (old && old._h === html) { return; }
+      if (old) { old.remove(); }
+      list.insertAdjacentHTML("beforeend", html);
+      list.lastElementChild._h = html;
+    };
     if (t.loading && !t.entries.length) {
-      spacer.style.height = "0px"; spacer.innerHTML = "";
-      list.insertAdjacentHTML("beforeend", "<div class='empty'><div class='box'><div class='spin' style='margin:0 auto 12px;width:22px;height:22px'></div><p>Opening " + esc(baseName(t.path)) + "\u2026</p></div></div>");
+      notice("<div class='empty'><div class='box'><div class='spin' style='margin:0 auto 12px;width:22px;height:22px'></div><p>Opening " + esc(baseName(t.path)) + "\u2026</p></div></div>");
       return;
     }
     if (t.error) {
-      spacer.style.height = "0px"; spacer.innerHTML = "";
-      list.insertAdjacentHTML("beforeend", "<div class='empty err'><div class='box'><div class='big'>" + svg("alert") + "</div><h3>This folder could not be opened</h3><p>" + esc(t.error) + "</p>" + (t.fullDisk ? "<p><button class='btn pri' data-fulldisk>" + svg("open") + "Open Full Disk Access settings</button></p>" : "") +
+      notice("<div class='empty err'><div class='box'><div class='big'>" + svg("alert") + "</div><h3>This folder could not be opened</h3><p>" + esc(t.error) + "</p>" + (t.fullDisk ? "<p><button class='btn pri' data-fulldisk>" + svg("open") + "Open Full Disk Access settings</button></p>" : "") +
         "<button class='btn' data-retry>Try again</button> <button class='btn' data-winexp>" + (LINUX ? "Open in the file manager" : "Open in Windows Explorer") + "</button></div></div>");
       return;
     }
     var v = viewOf(t);
     if (!v.length) {
-      spacer.style.height = "0px"; spacer.innerHTML = "";
       var why = t.mode === "search" ? (t.search && t.search.done ? "Nothing matched. Try fewer words, or a wildcard such as *.pdf." : "Looking\u2026") :
         (t.filter || t.f.type || t.f.when || t.f.size || t.f.ext) ? "Nothing here matches the filter." : (t.entries.length ? "Only hidden items are here. Show them from More." : "This folder is empty.");
-      list.insertAdjacentHTML("beforeend", "<div class='empty'><div class='box'><div class='big'>" + svg(t.mode === "search" ? "search" : "folder") + "</div><p>" + esc(why) + "</p></div></div>");
+      notice("<div class='empty'><div class='box'><div class='big'>" + svg(t.mode === "search" ? "search" : "folder") + "</div><p>" + esc(why) + "</p></div></div>");
       return;
     }
-    if (reset) { list.scrollTop = t.scroll || 0; }
+    if (old) { old.remove(); }
+    /* only when it's really somewhere else (another tab, a folder opened again): writing back the position
+       just read loses a fraction of a pixel at a zoom like 1.15, so a folder refreshing over and over (a
+       file growing) crept up a little each time */
+    if (reset && Math.abs(list.scrollTop - (t.scroll || 0)) >= 1) { list.scrollTop = t.scroll || 0; }
     if (t.scrollTo != null && t.scrollTo >= 0) { ensureVisible(i, t.scrollTo); t.scrollTo = null; }
     var H = list.clientHeight || 600, top = list.scrollTop;
-    var html = "";
+    var html = [];
     if (t.view === "grid") {
       var cols = gridCols(list);
       spacer.style.height = (Math.ceil(v.length / cols) * TILE_H + 20) + "px";
@@ -2454,21 +2511,35 @@ body {
         for (var c = 0; c < cols; c++) {
           var k = r * cols + c;
           if (k >= v.length) { break; }
-          html += tileHtml(t, v[k], k, r, c, pitch);
+          html.push(tileHtml(t, v[k], k, r, c, pitch));
         }
       }
-      spacer.innerHTML = "<div class='grid' style='grid-template-columns:repeat(" + cols + ", " + (TILE_W - 6) + "px);position:relative'>" + html + "</div>";
-      var g = spacer.firstChild;
-      g.style.position = "absolute"; g.style.display = "block";
+      var g = spacer.firstElementChild;
+      if (!g || !g.classList.contains("grid") || spacer.childElementCount !== 1) {
+        spacer.innerHTML = "<div class='grid'></div>";
+        g = spacer.firstChild;
+        g.style.position = "absolute"; g.style.display = "block";
+      }
+      patchKids(g, html);
       spacer._drawn = { t: t, v: v, grid: true, cols: cols, pitch: pitch, a: r0 * cols, b: Math.min(v.length, r1 * cols) };
       return;
     }
     var RH = ROW;
     spacer.style.height = (v.length * RH + 8) + "px";
     var a = Math.max(0, Math.floor(top / RH) - 8), b = Math.min(v.length, Math.ceil((top + H) / RH) + 8);
-    for (var n = a; n < b; n++) { html += rowHtml(t, v[n], n, n * RH + 4); }
-    spacer.innerHTML = html;
+    for (var n = a; n < b; n++) { html.push(rowHtml(t, v[n], n, n * RH + 4)); }
+    patchKids(spacer, html);
+    alignHead(p.el, list, spacer.firstElementChild);
     spacer._drawn = { t: t, v: v, grid: false, a: a, b: b };
+  }
+  /* The column headings start and end where the rows' columns do: the rows sit in from the list's edges
+     (their margin and padding, which each look sets its own way) and give way to its scroll bar */
+  function alignHead(el, list, row) {
+    var head = el.querySelector(".head");
+    if (!head || !row) { return; }
+    var rs = getComputedStyle(row), sb = list.offsetWidth - list.clientWidth;
+    var pad = "0 " + (parseFloat(rs.marginRight) + parseFloat(rs.paddingRight) + sb) + "px 0 " + (parseFloat(rs.marginLeft) + parseFloat(rs.paddingLeft)) + "px";
+    if (head._pad !== pad) { head.style.padding = pad; head._pad = pad; }
   }
   /* Scrolled: the rows (or tiles) drawn already stay where they are, and only the ones coming into sight are
      made, as the ones gone well out of it are let go. Making a row is what costs (its style and layout, over
@@ -2493,18 +2564,16 @@ body {
     // what is in sight, and a little more each way, is drawn already
     if (d.a <= Math.max(0, lo - 2 * per) && d.b >= Math.min(v.length, hi + 2 * per)) { return; }
     var item = function (n) { return grid ? tileHtml(t, v[n], n, Math.floor(n / per), n % per, d.pitch) : rowHtml(t, v[n], n, n * ROW + 4); };
-    var html = "", n;
+    var made = function (from, to) { var hs = []; for (var m = from; m < to; m++) { hs.push(item(m)); } return makeKids(hs); }, n;
     if (b <= d.a || a >= d.b) {
-      for (n = a; n < b; n++) { html += item(n); }
-      box.innerHTML = html;
+      box.textContent = "";
+      made(a, b).forEach(function (x) { box.appendChild(x); });
     } else {
       for (n = d.a; n < a; n++) { box.firstElementChild.remove(); }
       for (n = b; n < d.b; n++) { box.lastElementChild.remove(); }
-      for (n = a; n < Math.min(d.a, b); n++) { html += item(n); }
-      if (html) { box.insertAdjacentHTML("afterbegin", html); }
-      html = "";
-      for (n = Math.max(d.b, a); n < b; n++) { html += item(n); }
-      if (html) { box.insertAdjacentHTML("beforeend", html); }
+      var first = box.firstElementChild;
+      made(a, Math.min(d.a, b)).forEach(function (x) { box.insertBefore(x, first); });
+      made(Math.max(d.b, a), b).forEach(function (x) { box.appendChild(x); });
     }
     d.a = a; d.b = b;
   }
@@ -2561,8 +2630,9 @@ body {
     var pic = k === "image" && host && e.s < 25 * 1048576 && extOf(e.n) !== ".heic";
     // on Linux, photos, videos and PDFs show a small picture made in the background (and kept)
     var thumb = LINUX && host && !inZip(t) && !e.cl && (pic || k === "video" || k === "pdf");
-    var th = thumb ? "<img class='pic' loading='lazy' alt='' src='" + esc(thumbUrl(e.p, 256)) + "' onerror='this.replaceWith(document.createTextNode(\"\"))'>" :
-      pic ? "<img class='pic' loading='lazy' alt='' src='" + esc(fileUrl(e.p)) + "' onerror='this.replaceWith(document.createTextNode(\"\"))'>" : iconHtml(e, e.p, true);
+    // the kind's icon shows until the picture is in (and stays, if one can't be made), never an empty tile
+    var src = thumb ? thumbUrl(e.p, 256) : pic ? fileUrl(e.p) : "";
+    var th = src ? iconHtml(e, e.p, true) + "<img class='pic' loading='lazy' alt='' src='" + esc(src) + "' onload='this.parentNode.classList.add(\"ok\")' onerror='this.remove()'>" : iconHtml(e, e.p, true);
     return "<div class='tile" + (t.sel.has(e.p) ? " sel" : "") + (n === t.focus ? " focus" : "") + (cutSet.has(e.p) ? " cut" : "") + "' data-i='" + n + "' draggable='true' title='" + esc(e.n) + "' " +
       "style='position:absolute;left:" + (10 + c * pitch + (pitch - TILE_W + 6) / 2).toFixed(2) + "px;top:" + (10 + r * TILE_H) + "px;width:" + (TILE_W - 6) + "px'>" +
       "<div class='th'>" + th + "</div><div class='tn'>" + esc(e.n) + "</div></div>";
@@ -2574,9 +2644,11 @@ body {
       var n = +r.getAttribute("data-i"), e = v[n];
       if (!e) { return; }
       if (n === t.focus) { seen = true; }
+      var was = r.className;
       r.classList.toggle("sel", t.sel.has(e.p));
       r.classList.toggle("focus", n === t.focus);
       r.classList.toggle("cut", cutSet.has(e.p));
+      if (r.className !== was) { r._h = ""; }
     });
     if (t.focus >= 0 && !seen) { paintList(i); }
   }
@@ -2614,13 +2686,13 @@ body {
   function greeting() { var h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
   function paintHome(i) {
     var p = panes[i], list = p.el.querySelector(".list");
-    var spacer = list.querySelector(".spacer"); spacer.style.height = "0px"; spacer.innerHTML = "";
-    var old = list.querySelector(".home, .space, .empty"); if (old) { old.remove(); }
+    var spacer = list.querySelector(".spacer"); spacer.style.height = "0px"; if (spacer.firstChild) { spacer.innerHTML = ""; }
+    var old = list.querySelector(".home, .space, .empty");
     var sec = function (title, n, body) { return "<div class='hsec'><div class='hsec-h'>" + esc(title) + (n != null ? "<span class='n'>" + n + "</span>" : "") + "</div>" + body + "</div>"; };
     var html = "<div class='home'><div class='home-in'>" +
       "<div class='hero'><div><h1>" + esc(greeting()) + (whoAmI.user ? ", " + esc(whoAmI.user) : "") + "</h1><div class='who'>" +
         esc(whoAmI.machine ? "This PC \u00B7 " + whoAmI.machine : "This PC") + " \u00B7 " + plural(drives.length, "drive") + "</div></div>" +
-        "<div class='goto'>" + svg("search") + "<input data-goto placeholder='" + (LINUX ? "Go to a folder: ~/Documents, /tmp, $XDG_CONFIG_HOME" : "Go to a folder: C:\\Temp, %APPDATA%, \\\\server\\share") + "' spellcheck='false' aria-label='Go to a folder'></div></div>";
+        "<div class='goto'>" + svg("search") + "<input data-goto placeholder='" + (LINUX ? "Go to a folder: ~/Documents, /tmp" : "Go to a folder: C:\\Temp, %APPDATA%, \\\\server\\share") + "' spellcheck='false' aria-label='Go to a folder'></div></div>";
     if (S.favs.length) { html += sec("Favourites", S.favs.length, "<div class='qgrid'>" + S.favs.map(function (f) { return qtile(f, baseName(f), "starf", "star", parentOf(f) || ""); }).join("") + "</div>"); }
     html += sec("Folders", null, "<div class='qgrid'>" + places.map(function (pl) { return qtile(pl.path, pl.name, PLACEICON[pl.name] || "folder", ""); }).join("") +
       (LINUX ? qtile("~/.config", "Config", "folder", "plain", "~/.config") + qtile("/tmp", "Temp", "folder", "plain", "/tmp") +
@@ -2638,7 +2710,12 @@ body {
         return "<button class='rrow' data-go='" + esc(r) + "' title='" + esc(r) + "'>" + svg("clock") + "<span class='rn'>" + esc(baseName(r)) + "</span><span class='rp'>" + esc(whereOf(r)) + "</span></button>";
       }).join("") + "</div>");
     }
-    list.insertAdjacentHTML("beforeend", html + "</div></div>");
+    html += "</div></div>";
+    // drawn already as it is (what's typed in Go to stays)
+    if (old && old._h === html) { return; }
+    if (old) { old.remove(); }
+    list.insertAdjacentHTML("beforeend", html);
+    list.lastElementChild._h = html;
     var gi = list.querySelector("[data-goto]");
     gi.addEventListener("keydown", function (ev) {
       ev.stopPropagation();
@@ -2650,8 +2727,8 @@ body {
   /* ---- Status bar ---------------------------------------------------------------------------------- */
   function paintStatus(i) {
     var p = panes[i], t = tabOf(p), box = p.el.querySelector(".st-info");
-    if (t.path === "" && t.mode === "folder") { box.innerHTML = "<span>" + plural(drives.length, "drive") + "</span><span class='grow'></span><span>" + esc(whoAmI.user || "") + (whoAmI.machine ? " on " + esc(whoAmI.machine) : "") + "</span>"; return; }
-    if (t.mode === "space") { box.innerHTML = "<span>" + (t.space && t.space.done ? "Added up " + plural(t.space.rows.length, "folder") : "Adding up\u2026") + "</span><span class='grow'></span><span>Click a folder to look inside it</span>"; return; }
+    if (t.path === "" && t.mode === "folder") { put(box, "<span>" + plural(drives.length, "drive") + "</span><span class='grow'></span><span>" + esc(whoAmI.user || "") + (whoAmI.machine ? " on " + esc(whoAmI.machine) : "") + "</span>"); return; }
+    if (t.mode === "space") { put(box, "<span>" + (t.space && t.space.done ? "Added up " + plural(t.space.rows.length, "folder") : "Adding up\u2026") + "</span><span class='grow'></span><span>Click a folder to look inside it</span>"); return; }
     var v = viewOf(t), sel = selected(t);
     var bytes = 0, folders = 0;
     sel.forEach(function (e) { if (e.d) { folders++; if (t.sizes[e.p] != null) { bytes += t.sizes[e.p]; } } else { bytes += e.s; } });
@@ -2663,9 +2740,9 @@ body {
     var r = rootOf(t.path);
     var d = drives.filter(function (x) { return x.path.toUpperCase() === r; })[0];
     if (d && d.ready) { free = fmtSize(d.free) + " free on " + driveName(d); }
-    box.innerHTML = "<span>" + shown + "</span>" + (sel.length ? "<span><b>" + sel.length + " selected</b>" + (bytes ? ", " + fmtSize(bytes) : "") + (bytes && folders && !sel.every(function (e) { return !e.d || t.sizes[e.p] != null; }) ? " plus folders" : "") + "</span>" : "") +
+    put(box, "<span>" + shown + "</span>" + (sel.length ? "<span><b>" + sel.length + " selected</b>" + (bytes ? ", " + fmtSize(bytes) : "") + (bytes && folders && !sel.every(function (e) { return !e.d || t.sizes[e.p] != null; }) ? " plus folders" : "") + "</span>" : "") +
       (cutSet.size ? "<span>" + plural(cutSet.size, "item") + " cut, ready to paste</span>" : "") +
-      "<span class='grow'></span>" + (t.loading ? "<span class='spin'></span>" : "") + "<span>" + esc(free) + "</span>";
+      "<span class='grow'></span>" + (t.loading && !t.quietLoad ? "<span class='spin'></span>" : "") + "<span>" + esc(free) + "</span>");
     if (PICK) { pickPaint(); }
   }
 
@@ -2685,8 +2762,8 @@ body {
       if (S.favs.length) { ph += card("Favourites", S.favs.map(function (f) { return item(f, baseName(f), "", "starf"); }).join("")); }
       ph += card("Drives", drives.map(function (d) { return item(d.path, driveName(d), "", driveIcon(d)); }).join(""));
       if (clouds.length) { ph += card("Cloud", clouds.filter(function (c) { return c.mounted; }).map(function (c) { return item(c.path, c.label, "", "cloud"); }).join("")); }
-      $("sidePin").innerHTML = "";
-      $("sideScroll").innerHTML = ph;
+      put($("sidePin"), "");
+      put($("sideScroll"), ph);
       return;
     }
     var pin = card("Drives", drives.length ? drives.map(function (d) {
@@ -2700,7 +2777,7 @@ body {
       return "<button class='sitem sdrv' data-vol='" + esc(v.id) + "' title='" + esc(v.device || v.name) + "'><span class='top'>" + svg("drive") + "<span class='lbl'>" + esc(v.name) + "</span></span><span class='sub'>Not opened yet \u00B7 click to open</span></button>";
     }).join("") : "<div class='sempty'>Looking for drives\u2026</div>", "", LINUX ? "<button data-smb title='Connect to a server'>" + svg("plus") + "</button>" : "<button data-mapdrive title='Map a network drive'>" + svg("plus") + "</button>");
     // the drives stay put at the top of the side bar; everything under them scrolls
-    $("sidePin").innerHTML = pin;
+    put($("sidePin"), pin);
     var html = card("", item("", "This PC", "", "pc") + (PICK && PICK.mode === "save" ? "" : item(RECENT, "Recent", "", "clock")) + places.map(function (pl) { return item(pl.path, pl.name, "", PLACEICON[pl.name] || "folder"); }).join("") +
       (LINUX && trashBin.path ? item(trashBin.path, "Trash", trashBin.count ? esc(plural(trashBin.count, "item")) : "", "trash", " data-trash") : ""));
     // what's connected on this computer; on Linux, where no service has an app, Atlas connects them itself
@@ -2720,7 +2797,7 @@ body {
     if (!LINUX) html += card("Network", S.servers.length ? S.servers.map(function (sv) { return item(sv, baseName(sv), esc(sv), /^\\\\[^\\]+$/.test(sv) ? "server" : "net", " data-srv='" + esc(sv) + "'"); }).join("") :
         "<div class='sempty'>Add a server such as \\\\fileserver to see its shares.</div>", "", "<button data-addsrv title='Add a server or share'>" + svg("plus") + "</button>");
     if (S.recent.length) { html += card("Recent folders", S.recent.slice(0, 8).map(function (r) { return item(r, baseName(r), "", "clock"); }).join(""), "", "<button data-clrrec title='Clear the list'>" + svg("x") + "</button>"); }
-    $("sideScroll").innerHTML = html;
+    put($("sideScroll"), html);
   }
   /* ---- Mapping network drives ---------------------------------------------------------------------- */
   // Mapped as you, the same as Explorer's "Map network drive", so the drive shows everywhere.
@@ -3313,9 +3390,11 @@ body {
     });
     if ($("copies").hidden) { return; }
     var waitingN = list.filter(function (c) { return c.status === "waiting"; }).length;
-    $("cpStatus").innerHTML = "<span>" + (active ? (active - waitingN) + " running" + (waitingN ? ", " + waitingN + " waiting" : "") : list.length ? "All finished" : "Nothing running") + "</span>";
-    if (!list.length) { $("cpList").innerHTML = "<div class='dr-empty'>Nothing copied yet. Copies and moves show here while they run, with their progress.</div>"; return; }
-    $("cpList").innerHTML = list.slice().reverse().map(function (c) {
+    put($("cpStatus"), "<span>" + (active ? (active - waitingN) + " running" + (waitingN ? ", " + waitingN + " waiting" : "") : list.length ? "All finished" : "Nothing running") + "</span>");
+    if (!list.length) { put($("cpList"), "<div class='dr-empty'>Nothing copied yet. Copies and moves show here while they run, with their progress.</div>"); return; }
+    // one card per copy; only the ones whose progress moved are made again (so Pause and Stop take every click)
+    var cpBox = $("cpList"); cpBox._h = null;
+    patchKids(cpBox, list.slice().reverse().map(function (c) {
       var pct = c.bytesTotal ? Math.min(100, Math.round(c.bytesDone / c.bytesTotal * 100)) : (c.status === "done" ? 100 : 0);
       var speed = c.elapsed > 800 ? c.bytesDone / (c.elapsed / 1000) : 0;
       var left = speed > 0 && c.bytesTotal > c.bytesDone ? (c.bytesTotal - c.bytesDone) / speed : 0;
@@ -3334,7 +3413,7 @@ body {
         (c.status === "running" && c.note ? "<div class='cp-note'>" + esc(c.note) + "</div>" : "") +
         (probs.length ? "<div class='cp-p'>" + probs.slice(0, 20).map(function (pr) { return esc(baseName(pr.path)) + ": " + esc(pr.error); }).join("<br>") + (probs.length > 20 ? "<br>and " + (probs.length - 20) + " more" : "") + "</div>" : "") +
         (c.error ? "<div class='cp-p'>" + esc(c.error) + "</div>" : "") + "</div>";
-    }).join("");
+    }));
   }
   function fmtLeft(s) { s = Math.round(s); if (s < 60) { return s + " s"; } if (s < 3600) { return Math.round(s / 60) + " min"; } return (s / 3600).toFixed(1) + " h"; }
 
@@ -3456,38 +3535,48 @@ body {
     if (!e || t.mode === "space") { return; }
     if (selected(t).length > 1 && name == null) { bulkRename(t); return; }
     t.sel = new Set([e.p]); t.focus = n; t.anchor = n;
-    if (t.view === "grid") {
-      ask("Rename", "New name", e.n).then(function (nn) { if (nn != null) { doRename(t, [{ path: e.p, name: nn.trim() }]); } });
-      return;
-    }
     ensureVisible(i, n);
-    paintList(i);
-    var row = panes[i].el.querySelector(".row[data-i='" + n + "'] .nm span");
-    if (!row) { return; }
-    t.renaming = true;
-    var inp = D.createElement("input");
-    inp.className = "ren"; inp.value = e.n; inp.spellcheck = false;
-    row.replaceWith(inp);
-    inp.focus();
-    var dot = e.d ? -1 : e.n.lastIndexOf(".");
-    inp.setSelectionRange(0, dot > 0 ? dot : e.n.length);
-    var finished = false;
-    var finish = function (ok) {
-      if (finished) { return; }
-      finished = true; t.renaming = false;
-      var nn = inp.value.trim();
-      if (ok && nn && nn !== e.n) { doRename(t, [{ path: e.p, name: nn }]); } else { paintList(i); }
+    paintList(i); paintStatus(i); paintPreview();
+    renameDialog(t, e).then(function (nn) {
+      if (nn && nn !== e.n) { doRename(t, [{ path: e.p, name: nn }]); }
       focusList(i);
-    };
-    inp.addEventListener("keydown", function (ev) {
-      ev.stopPropagation();
-      if (ev.key === "Enter") { ev.preventDefault(); finish(true); }
-      else if (ev.key === "Escape") { ev.preventDefault(); finish(false); }
-      else if (ev.key === "Tab") { ev.preventDefault(); finish(true); }
     });
-    inp.addEventListener("blur", function () { finish(true); });
-    inp.addEventListener("mousedown", function (ev) { ev.stopPropagation(); });
-    inp.addEventListener("dblclick", function (ev) { ev.stopPropagation(); });
+  }
+  // a popup with room for the whole name: it wraps onto more lines instead of scrolling out of sight
+  function renameDialog(t, e) {
+    t.renaming = true;
+    var dir = parentOf(e.p);
+    return dialog({ title: e.d ? "Rename folder" : "Rename", sub: dir ? "In " + dir : "", icon: "rename", wide: e.n.length > 50, selectAll: false,
+      body: "<div class='fld'><label for='renIn'>New name</label><textarea id='renIn' class='ren-in' rows='1' spellcheck='false'></textarea>" +
+        "<span class='hint' id='renWas'></span></div>",
+      buttons: [{ label: "Cancel", value: null }, { label: "Rename", pri: true,
+        check: function (s) {
+          var v = s.querySelector("#renIn").value.trim(), w = s.querySelector("#renWas");
+          var bad = !v ? "Type a name." : /\//.test(v) ? "A name can't have / in it." : v === "." || v === ".." ? "That name is taken by the system." : "";
+          if (bad) { w.textContent = bad; w.classList.add("bad"); s.querySelector("#renIn").focus(); }
+          return !bad;
+        },
+        read: function (s) { return s.querySelector("#renIn").value.trim(); } }],
+      mount: function (s) {
+        var inp = s.querySelector("#renIn"), was = s.querySelector("#renWas");
+        var fit = function () { inp.style.height = "auto"; inp.style.height = inp.scrollHeight + 2 + "px"; };
+        var note = function () { was.classList.remove("bad"); was.textContent = inp.value.trim() !== e.n ? "Was " + e.n : ""; };
+        inp.value = e.n;
+        inp.addEventListener("input", function () {
+          // a name is one line: pasted line breaks become spaces
+          if (/[\r\n]/.test(inp.value)) { var at = inp.selectionStart; inp.value = inp.value.replace(/\r?\n|\r/g, " "); inp.setSelectionRange(at, at); }
+          fit(); note();
+        });
+        inp.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter") { ev.preventDefault(); ev.stopPropagation(); s.querySelector(".btn.pri").click(); }
+        });
+        setTimeout(function () {
+          fit(); inp.focus();
+          var dot = e.d ? -1 : e.n.lastIndexOf(".");
+          inp.setSelectionRange(0, dot > 0 ? dot : e.n.length);
+        }, 20);
+      }
+    }).then(function (v) { t.renaming = false; return v; });
   }
   var lastRename = null;
   function doRename(t, items, quiet) {
@@ -3829,23 +3918,26 @@ body {
   }
   function paintSpace(i) {
     var p = panes[i], t = tabOf(p), sp = t.space, list = p.el.querySelector(".list");
-    var spacer = list.querySelector(".spacer"); spacer.style.height = "0px"; spacer.innerHTML = "";
-    var old = list.querySelector(".home, .space, .empty"); if (old) { old.remove(); }
+    var spacer = list.querySelector(".spacer"); spacer.style.height = "0px"; if (spacer.firstChild) { spacer.innerHTML = ""; }
+    var old = list.querySelector(".home, .space, .empty");
     var rows = sp.rows.slice().sort(function (a, b) { return (b.bytes || 0) - (a.bytes || 0); });
     var total = rows.reduce(function (s, r) { return s + (r.bytes || 0); }, 0) + (sp.files || 0);
     var max = Math.max(1, rows.length ? rows[0].bytes || 0 : 0, sp.files || 0);
-    var html = "<div class='space'><div class='srow static' style='font-weight:600;color:var(--text)'><div class='nm'>" + svg("pie") + "<span>" + esc(baseName(sp.path)) + "</span></div><div style='color:var(--muted);font-weight:400;font-size:12px'>" +
-      (sp.done ? "Everything in this folder" : "<span class='spin' style='display:inline-block;vertical-align:-2px'></span> Adding up\u2026") + "</div><div class='r'>" + fmtSize(total) + "</div><div class='pct'></div></div>";
-    html += rows.map(function (r) {
+    var html = ["<div class='srow static' style='font-weight:600;color:var(--text)'><div class='nm'>" + svg("pie") + "<span>" + esc(baseName(sp.path)) + "</span></div><div style='color:var(--muted);font-weight:400;font-size:12px'>" +
+      (sp.done ? "Everything in this folder" : "<span class='spin' style='display:inline-block;vertical-align:-2px'></span> Adding up\u2026") + "</div><div class='r'>" + fmtSize(total) + "</div><div class='pct'></div></div>"];
+    html = html.concat(rows.map(function (r) {
       var pc = total ? (r.bytes || 0) / total * 100 : 0;
       return "<div class='srow' data-sp='" + esc(r.path) + "' title='" + esc(r.path) + (r.denied ? " \u00B7 some folders inside could not be opened" : "") + "'><div class='nm'><span class='fi'>" + folderSvg() + "</span><span>" + esc(baseName(r.path)) + "</span></div>" +
         "<div class='bar2'><i style='width:" + Math.max(0.5, (r.bytes || 0) / max * 100) + "%'></i></div><div class='r'>" + (r.partial ? "\u2026 " : "") + fmtSize(r.bytes || 0) + "</div><div class='pct'>" + (pc >= 0.1 ? pc.toFixed(pc < 10 ? 1 : 0) + "%" : "") + "</div></div>";
-    }).join("");
+    }));
     if (sp.files) {
-      html += "<div class='srow static'><div class='nm'>" + svg("doc") + "<span style='color:var(--text-2)'>Files in this folder itself</span></div><div class='bar2'><i class='files' style='width:" + (sp.files / max * 100) + "%'></i></div><div class='r'>" + fmtSize(sp.files) + "</div><div class='pct'>" + (total ? (sp.files / total * 100).toFixed(1) + "%" : "") + "</div></div>";
+      html.push("<div class='srow static'><div class='nm'>" + svg("doc") + "<span style='color:var(--text-2)'>Files in this folder itself</span></div><div class='bar2'><i class='files' style='width:" + (sp.files / max * 100) + "%'></i></div><div class='r'>" + fmtSize(sp.files) + "</div><div class='pct'>" + (total ? (sp.files / total * 100).toFixed(1) + "%" : "") + "</div></div>");
     }
-    if (sp.done && !rows.length && !sp.files) { html += "<div class='pv-note'>This folder is empty.</div>"; }
-    list.insertAdjacentHTML("beforeend", html + "</div>");
+    if (sp.done && !rows.length && !sp.files) { html.push("<div class='pv-note'>This folder is empty.</div>"); }
+    // the rows already there stay; only the folders whose totals moved are made again
+    var box = old && old.classList.contains("space") ? old : null;
+    if (!box) { if (old) { old.remove(); } list.insertAdjacentHTML("beforeend", "<div class='space'></div>"); box = list.lastElementChild; }
+    patchKids(box, html);
   }
   function folderSizes(t) {
     var folders = viewOf(t).filter(function (e) { return e.d && t.sizes[e.p] == null; }).slice(0, 300);
@@ -3879,7 +3971,11 @@ body {
     if (!sel.length && t.focus >= 0 && t.mode !== "space") { var fv = viewOf(t)[t.focus]; if (fv) { sel = [fv]; } }
     var key = sel.length === 1 ? sel[0].p + "|" + sel[0].m + "|" + sel[0].s : sel.length + ":" + t.path + ":" + t.mode + ":" + (t.loading ? "l" : t.entries.length);
     if (key === pvShown) { return; }
+    // the same file, changed (a download or a copy still growing): updated where it is, not drawn again
+    var same = sel.length === 1 && pvShown.indexOf(sel[0].p + "|") === 0 && !!$("pvStage") && !inZip(t);
     pvShown = key;
+    // (on the same ticket: what the first drawing is still reading for it isn't thrown away)
+    if (same) { pvUpdate(sel[0], pvTicket); return; }
     var ticket = ++pvTicket;
     if (!sel.length) {
       if (t.mode === "folder" && t.path) {
@@ -3952,10 +4048,11 @@ body {
       }
     }
     var media = null, base = null, mapAt = null;
+    pvMedia = { p: e.p, rows: null, map: null };
     var paintFacts = function () {
       if (ticket !== pvTicket || !base || !$("pvFacts")) { return; }
-      $("pvFacts").innerHTML = factRows([["Found", e.hit || ""], ["On line", e.hit && e.ln ? String(e.ln) : ""]].concat(media || [], base)) +
-        (mapAt ? "<div class='pv-acts pv-map'><button class='btn sm' data-pv='map'>" + svg("pic") + "Show where it was taken</button></div>" : "");
+      pvMedia = { p: e.p, rows: media, map: mapAt };
+      put($("pvFacts"), pvFactsHtml(e, media, base, mapAt));
     };
     // a photo's camera and place, a song's tags, a PDF's pages... (atlas_media.py), when the file has them
     if (!e.d && !e.cl && /^\.(jpe?g|jpe|png|gif|webp|bmp|tiff?|mp4|m4v|mov|mkv|webm|avi|wmv|flv|mpe?g|ts|3gp|mp3|m4a|aac|flac|ogg|oga|opus|wav|wma|aiff?|alac|pdf|docx|docm|xlsx|xlsm|pptx)$/i.test(extOf(e.n)) && !inZip(t)) {
@@ -3964,9 +4061,47 @@ body {
     pvMap = null;
     api("details", { path: e.p }).then(function (d) {
       if (ticket !== pvTicket) { return; }
-      base = [["Modified", fmtDate(d.m, true)], ["Created", fmtDate(d.c, true)], ["Opened", fmtDate(d.accessed, true)], e.o || e.x ? ["Was in", e.o ? parentOf(e.o) : "Unknown"] : ["Location", parentOf(e.p)], ["Deleted", e.x ? fmtDate(e.x, true) : ""],
-        ["Contains", d.items != null ? plural(d.items, "item") : ""], ["Size", d.d ? "" : fmtSize(d.s) + " (" + (d.s || 0).toLocaleString() + " bytes)"], ["Owner", d.owner], ["Version", d.version], ["Product", d.product], ["Company", d.company], ["Attributes", d.attributes]];
+      base = detailRows(e, d);
       paintFacts();
+    }).catch(function () { });
+  }
+  var pvMedia = null;   // the photo's or song's own facts, kept for when the same file changes
+  function detailRows(e, d) {
+    return [["Modified", fmtDate(d.m, true)], ["Created", fmtDate(d.c, true)], ["Opened", fmtDate(d.accessed, true)], e.o || e.x ? ["Was in", e.o ? parentOf(e.o) : "Unknown"] : ["Location", parentOf(e.p)], ["Deleted", e.x ? fmtDate(e.x, true) : ""],
+      ["Contains", d.items != null ? plural(d.items, "item") : ""], ["Size", d.d ? "" : fmtSize(d.s) + " (" + (d.s || 0).toLocaleString() + " bytes)"], ["Owner", d.owner], ["Version", d.version], ["Product", d.product], ["Company", d.company], ["Attributes", d.attributes]];
+  }
+  function pvFactsHtml(e, media, base, mapAt) {
+    return factRows([["Found", e.hit || ""], ["On line", e.hit && e.ln ? String(e.ln) : ""]].concat(media || [], base)) +
+      (mapAt ? "<div class='pv-acts pv-map'><button class='btn sm' data-pv='map'>" + svg("pic") + "Show where it was taken</button></div>" : "");
+  }
+  /* The file in the preview changed: its size line and facts are updated, a text file's words and a picture
+     are swapped in once the new ones are read (so nothing goes blank meanwhile), and the rest (a video
+     playing, a PDF's pages, a document) is left alone. */
+  function pvUpdate(e, ticket) {
+    var body = $("pvBody"), st = $("pvStage"), kind = body.querySelector(".pv-kind");
+    if (kind) { var kt = typeLabel(e) + (e.d ? "" : " \u00B7 " + fmtSize(e.s)); if (kind.textContent !== kt) { kind.textContent = kt; } }
+    var pre = st && st.querySelector(".pv-text");
+    if (pre && !e.cl) {
+      api("readtext", { path: e.p }).then(function (r) {
+        if (ticket !== pvTicket || r.binary || !pre.isConnected) { return; }
+        var more = r.cut ? "\n\n\u2026 (the start of a larger file)" : "", x = extOf(e.n), html;
+        if (/^\.(md|markdown|mdown)$/.test(x)) { html = mdHtml(r.text.slice(0, 200000)) + (more ? "<p class='acsub'>" + esc(more) + "</p>" : ""); }
+        else if (CODE[x]) { html = highlight(r.text.slice(0, 200000), CODE[x]) + esc(more); }
+        else { html = esc(r.text.slice(0, 200000)) + more; }
+        put(pre, html);
+      }).catch(function () { });
+    }
+    var img = st && st.classList.contains("fill") && st.querySelector("img.pic");
+    if (img && kindOf(e) === "image" && !e.cl) {
+      var next = new Image();
+      next.className = "pic"; next.alt = "";
+      next.onload = function () { if (ticket === pvTicket && img.isConnected) { img.replaceWith(next); } };
+      next.src = fileUrl(e.p) + "&v=" + (e.m || 0) + "-" + (e.s || 0);
+    }
+    api("details", { path: e.p }).then(function (d) {
+      if (ticket !== pvTicket || !$("pvFacts")) { return; }
+      var m = pvMedia && pvMedia.p === e.p ? pvMedia : { rows: null, map: null };
+      put($("pvFacts"), pvFactsHtml(e, m.rows, detailRows(e, d), m.map));
     }).catch(function () { });
   }
   // Every page of a PDF, as pictures made when they are scrolled to
@@ -5437,8 +5572,18 @@ body {
       "--text": "#ffffff", "--text-2": "#d6dcdd", "--muted": "#849092", "--accent": "#f6cc8a", "--accent-2": "#a090e0", "--accent-soft": "rgba(246,204,138,.14)",
       "--folder": "#f6cc8a", "--head": "#1f3537", "--dark": "1", "--c-on-acc": "#1b1407",
       "--c-sel": "#de3536", "--sel": "rgba(222,53,54,.24)", "--sel-line": "rgba(222,53,54,.62)",
-      "--c-card": "linear-gradient(180deg, rgba(31,53,55,.94) 0%, rgba(16,28,33,.9) 100%)", "--c-acc-hi": "#f6cc8a" } }
+      "--c-card": "linear-gradient(180deg, rgba(31,53,55,.94) 0%, rgba(16,28,33,.9) 100%)", "--c-acc-hi": "#f6cc8a" } },
+    // smoked glass: the window itself is see-through, the desktop behind it darkened by a grey-black tint,
+    // with a cool ice-blue light (Linux only: the host makes the window without a background)
+    { id: "smoke", label: "Smoke (see-through)", dark: true, exact: true, glass: true, accent: "#a6c1f7", sel: "#d7dde8", vars: {
+      "--bg": "#101114", "--c-deep": "#08090b", "--surface": "#17181c", "--surface-2": "#1d1e23", "--surface-3": "#27292f", "--line": "#3b3d45",
+      "--text": "#f3f4f6", "--text-2": "#d3d6dc", "--muted": "#a0a5af", "--accent": "#a6c1f7", "--accent-2": "#c9b8f5", "--accent-soft": "rgba(166,193,247,.14)",
+      "--folder": "#bccff3", "--head": "#18191d", "--dark": "1", "--c-on-acc": "#0c1222",
+      "--c-sel": "#d7dde8", "--sel": "rgba(215,221,232,.14)", "--sel-line": "rgba(215,221,232,.45)",
+      "--c-card": "linear-gradient(180deg, rgba(16,17,20,.74) 0%, rgba(8,9,11,.82) 100%)", "--c-acc-hi": "#c4d6fb" } }
   ];
+  // a see-through window is something only the Linux host makes
+  if ((W.__atlasSystem || "linux") !== "linux") { THEMES = THEMES.filter(function (t) { return !t.glass; }); }
   THEMES.forEach(function (t) { if (t.bold || t.exact) { t.sw = t.accent; } });
   /* ---- The Atlas icon: one drawing, in the theme's accent colour --------------------------------- */
   function hexMix(a, b, t) {
@@ -5446,20 +5591,31 @@ body {
     var x = p(a), y = p(b);
     return "#" + x.map(function (v, i) { var c = Math.round(v + (y[i] - v) * t); return (c < 16 ? "0" : "") + c.toString(16); }).join("");
   }
-  // small: for 24 pixels and under, without the dotted route and with a bigger pin
+  /* Orbit: a globe in the theme's accent with a ring around it and a small satellite, on a deep navy tile
+     (the same drawing as atlas.svg). small: for 24 pixels and under, without the globe's lines, with a bolder
+     ring and a bigger satellite */
   function logoSvg(accent, small, uid) {
-    var light = hexMix(accent, "#ffffff", 0.3), deep = hexMix(accent, "#000000", 0.3), pin = hexMix(accent, "#000000", 0.4), pin2 = hexMix(accent, "#000000", 0.1);
+    var hi = hexMix(accent, "#ffffff", 0.72), deep = hexMix(accent, "#1a0a4a", 0.55), ring = hexMix(accent, "#ffffff", 0.7), front = hexMix(accent, "#ffffff", 0.88);
     var id = uid || "lg";
-    return "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs>" +
-      "<linearGradient id='" + id + "b' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='" + light + "'/><stop offset='.5' stop-color='" + accent + "'/><stop offset='1' stop-color='" + deep + "'/></linearGradient>" +
-      "<linearGradient id='" + id + "s' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#fff' stop-opacity='.28'/><stop offset='.5' stop-color='#fff' stop-opacity='0'/></linearGradient>" +
-      "<linearGradient id='" + id + "p' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" + pin2 + "'/><stop offset='1' stop-color='" + pin + "'/></linearGradient></defs>" +
-      "<rect x='2' y='2' width='60' height='60' rx='15' fill='url(#" + id + "b)'/><rect x='2' y='2' width='60' height='60' rx='15' fill='url(#" + id + "s)'/>" +
-      "<g transform='translate(0,2)'><path d='M11 20 L24 16 L24 45 L11 49 Z' fill='#fff' fill-opacity='.97'/><path d='M24 16 L40 20 L40 49 L24 45 Z' fill='#fff' fill-opacity='.74'/><path d='M40 20 L53 16 L53 45 L40 49 Z' fill='#fff' fill-opacity='.97'/>" +
-      (small ? "<path d='M42 37 C 37 31, 34 27.5, 34 23.5 a 8 8 0 0 1 16 0 c 0 4, -3 7.5, -8 13.5 Z' fill='url(#" + id + "p)'/><circle cx='42' cy='23.5' r='3.2' fill='#fff'/>" :
-        "<path d='M16 40 C 22 34, 27 41, 33 35 S 40 28, 44 29' fill='none' stroke='" + pin2 + "' stroke-width='2.4' stroke-linecap='round' stroke-dasharray='0.1 4.4'/>" +
-        "<path d='M44 34.5 C 40 29.5, 37.5 26.5, 37.5 23.5 a 6.5 6.5 0 0 1 13 0 c 0 3, -2.5 6, -6.5 11 Z' fill='url(#" + id + "p)'/><circle cx='44' cy='23.5' r='2.6' fill='#fff'/>") +
-      "</g></svg>";
+    var head = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs>" +
+      "<linearGradient id='" + id + "b' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#1d2347'/><stop offset='1' stop-color='#080a15'/></linearGradient>" +
+      "<radialGradient id='" + id + "s' cx='.34' cy='.28' r='.85'><stop offset='0' stop-color='" + hi + "'/><stop offset='.4' stop-color='" + accent + "'/><stop offset='1' stop-color='" + deep + "'/></radialGradient>";
+    if (small) {
+      return head + "</defs><rect x='2' y='2' width='60' height='60' rx='14' fill='url(#" + id + "b)'/>" +
+        "<g transform='rotate(-20 32 32)'><ellipse cx='32' cy='32' rx='26' ry='9' fill='none' stroke='" + ring + "' stroke-opacity='.45' stroke-width='3'/></g>" +
+        "<circle cx='32' cy='32' r='17' fill='url(#" + id + "s)'/>" +
+        "<g transform='rotate(-20 32 32)'><path d='M6 32 A26 9 0 0 0 58 32' fill='none' stroke='" + front + "' stroke-width='4' stroke-linecap='round'/><circle cx='45' cy='39.8' r='5' fill='#fff'/></g></svg>";
+    }
+    return head +
+      "<linearGradient id='" + id + "h' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#fff' stop-opacity='.12'/><stop offset='.45' stop-color='#fff' stop-opacity='0'/></linearGradient>" +
+      "<radialGradient id='" + id + "g' cx='.5' cy='.5' r='.5'><stop offset='0' stop-color='" + accent + "' stop-opacity='.5'/><stop offset='1' stop-color='" + accent + "' stop-opacity='0'/></radialGradient>" +
+      "<clipPath id='" + id + "c'><circle cx='32' cy='32' r='15'/></clipPath></defs>" +
+      "<rect x='2' y='2' width='60' height='60' rx='15' fill='url(#" + id + "b)'/><circle cx='32' cy='32' r='25' fill='url(#" + id + "g)'/>" +
+      "<g transform='rotate(-20 32 32)'><ellipse cx='32' cy='32' rx='25' ry='8.5' fill='none' stroke='" + ring + "' stroke-opacity='.32' stroke-width='1.6'/></g>" +
+      "<circle cx='32' cy='32' r='15' fill='url(#" + id + "s)'/>" +
+      "<g clip-path='url(#" + id + "c)' fill='none' stroke='#fff' stroke-opacity='.3' stroke-width='.9'><ellipse cx='32' cy='32' rx='6' ry='15'/><ellipse cx='32' cy='32' rx='11.5' ry='15'/><path d='M16 32h32M18 24.5h28M18 39.5h28'/></g>" +
+      "<g transform='rotate(-20 32 32)'><path d='M7 32 A25 8.5 0 0 0 57 32' fill='none' stroke='" + front + "' stroke-width='2.2' stroke-linecap='round'/><circle cx='44.5' cy='39.4' r='3' fill='#fff'/><circle cx='44.5' cy='39.4' r='5.5' fill='#fff' fill-opacity='.18'/></g>" +
+      "<rect x='2' y='2' width='60' height='60' rx='15' fill='url(#" + id + "h)'/></svg>";
   }
   // an .ico (32-bit bitmaps, one per size) drawn from the logo, for the title bar and taskbar
   function buildIco(accent) {
@@ -5550,8 +5706,31 @@ body {
       "--folder": readable(hexMix(acc, dark ? "#ffffff" : "#000000", 0.06), bg, dark, 3.5)
     };
   }
+  /* Smoke: the page tells the host, which keeps it for the window it makes at the next start (a window is
+     see-through or not from when it's made). Chosen in a window that isn't yet, Atlas offers to restart. */
+  var glassAsked = false;
+  function setGlass(on) {
+    var root = D.documentElement;
+    if (on) { root.setAttribute("data-glass", ""); } else { root.removeAttribute("data-glass"); }
+    if (!host || PICK) { return; }
+    api("glass", { on: on }).then(function (r) {
+      var live = !!(r && r.live);
+      root.classList.toggle("glass-wait", on && !live);
+      if (on && !live && !glassAsked) {
+        glassAsked = true;
+        // asked in a window of its own (a note in the status bar was easy to miss)
+        dialog({ title: "Restart Atlas for Smoke?", icon: "palette",
+          sub: "Smoke lets your desktop show through Atlas. A window can only be see-through from when it opens, so Atlas restarts once. Your tabs come back as they are.",
+          buttons: [{ label: "Later", value: false }, { label: "Restart now", pri: true, value: true }] }).then(function (go) {
+          if (go) { api("restart").catch(fail); }
+          else { toast("Smoke will be see-through the next time Atlas starts."); }
+        });
+      }
+    }).catch(function () { });
+  }
   function paintTheme(th) {
     var root = D.documentElement;
+    if (!!th.glass !== root.hasAttribute("data-glass") || th.glass) { setGlass(!!th.glass); }
     if (th.exact) {
       root.removeAttribute("data-look");
       root.setAttribute("data-theme", th.dark ? "graphitedk" : "graphite");
@@ -5570,6 +5749,7 @@ body {
   function applyOmarchy() {
     if (S.theme !== "omarchy" || !omarchyPal) { return; }
     var look = omarchyLook(omarchyPal), root = D.documentElement;
+    if (root.hasAttribute("data-glass")) { setGlass(false); }
     root.removeAttribute("data-look");
     // Atlas's own dark or light theme underneath, for everything that differs between the two
     root.setAttribute("data-theme", look.dark ? "graphitedk" : "graphite");
@@ -5607,6 +5787,7 @@ body {
     }
     OMVARS.forEach(function (k) { D.documentElement.style.removeProperty(k); });
     var th = THEMES.filter(function (x) { return x.id === id; })[0] || THEMES[0];
+    if (th.glass) { glassAsked = false; }
     S.theme = th.id;
     paintTheme(th);
     themeHost(th.dark, th.sw);
